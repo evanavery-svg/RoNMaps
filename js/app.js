@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.6";
+  const APP_VERSION = "0.7";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -55,7 +55,6 @@
     activeIndex: 0,      // floor targeted by undo/reset (most in view / last tapped)
     selectedId: null,    // globally-selected marker
     selectedIndex: -1,   // index of the floor holding the selected marker
-    selectionFromStamp: false,  // was the selection auto-set by a fresh stamp?
     tool: "stamp",       // "stamp" | "eraser"
     stampType: "x",      // "x" | "w" — which shape the stamp places
     color: "#e02424",
@@ -134,11 +133,12 @@
     pushUndo(floor);
     const m = { id: uid(), x, y, size: state.stampSize, color: state.color, type: state.stampType };
     floor.markers.push(m);
-    setSelected(floor, m.id, true);
+    clearSelection();            // a fresh stamp is NOT selected — tap it again to select
     saveFloor(floor);
     renderFloor(floor);
     updateSizeGroup();
     buzz(15);
+    return m.id;
   }
   function deleteMarker(floor, id) {
     const i = floor.markers.findIndex((m) => m.id === id);
@@ -164,23 +164,19 @@
     toast("Cleared " + f.map.name, { action: "Undo", onAction: undo });
   }
 
-  // ---- selection ----
-  // `fromStamp` marks a selection that came from a fresh stamp (vs. a deliberate tap
-  // on an existing mark). A shape-switch only converts a deliberately-selected mark.
-  function setSelected(floor, id, fromStamp) {
+  // ---- selection ---- (only ever set by a deliberate tap on an existing mark)
+  function setSelected(floor, id) {
     const prev = selectedFloor();
     state.selectedId = id;
     state.selectedIndex = indexOf(floor);
-    state.selectionFromStamp = !!fromStamp;
     if (prev && prev !== floor) renderFloor(prev);
     renderFloor(floor);
   }
-  function selectMarker(floor, id) { setSelected(floor, id, false); updateSizeGroup(); }
+  function selectMarker(floor, id) { setSelected(floor, id); updateSizeGroup(); }
   function clearSelection() {
     const prev = selectedFloor();
     state.selectedId = null;
     state.selectedIndex = -1;
-    state.selectionFromStamp = false;
     if (prev) renderFloor(prev);
   }
   function deselect() {
@@ -434,8 +430,7 @@
       // tap on the already-selected X — keep it selected (no-op)
     } else { // empty
       if (state.tool === "stamp" && inBounds(p.floor, p.startImg)) {
-        addMarker(p.floor, p.startImg.x, p.startImg.y);
-        stampedId = state.selectedId;
+        stampedId = addMarker(p.floor, p.startImg.x, p.startImg.y);
       } else {
         deselect();
       }
@@ -512,9 +507,9 @@
     state.color = c;
     el.colorInput.value = normalizeHex(c) || el.colorInput.value;
     const m = selectedMarker();
-    // Recolor a deliberately-selected mark; don't recolor one just auto-selected from a
-    // fresh stamp (so picking a color for the next mark doesn't rewrite the last one).
-    if (m && !state.selectionFromStamp && m.color !== c) {
+    // Recolor the selected mark (selection is always a deliberate tap now); otherwise
+    // this just sets the color for the next stamp.
+    if (m && m.color !== c) {
       const f = selectedFloor();
       pushUndo(f);
       m.color = c;
@@ -528,15 +523,13 @@
   }
   function normalizeHex(c) { return /^#[0-9a-fA-F]{6}$/.test(c) ? c : null; }
 
-  // Pick which shape the stamp places (X or W). Mirrors setColor: also converts the
-  // selected marker, so you can switch an existing mark's shape just as easily.
+  // Pick which shape the stamp places (X or W). If a mark is selected (a deliberate
+  // tap), also convert it — so you can switch an existing mark's shape just as easily.
   function setStampType(type) {
     state.stampType = type;
     if (state.tool !== "stamp") setTool("stamp");
     const m = selectedMarker();
-    // Convert a deliberately-selected mark; don't flip one that was just auto-selected
-    // from a fresh stamp (so "stamp X's, switch to W" doesn't rewrite the last X).
-    if (m && !state.selectionFromStamp && (m.type || "x") !== type) {
+    if (m && (m.type || "x") !== type) {
       const f = selectedFloor();
       pushUndo(f);
       m.type = type;
