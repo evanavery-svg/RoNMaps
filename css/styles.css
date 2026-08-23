@@ -170,7 +170,7 @@ body {
 .tool:disabled { opacity: .4; cursor: default; }
 .tool.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .tool-danger.active, .tool-danger:hover:not(:disabled) { border-color: var(--danger); }
-.tool-x { font-weight: 800; }
+.tool-x { font-weight: 800; min-width: 1ch; text-align: center; }
 .tool-ico { font-size: 15px; }
 
 .swatch {

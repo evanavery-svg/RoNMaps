@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.4";
+  const APP_VERSION = "0.5";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -34,7 +34,8 @@
     missionTitle: document.getElementById("missionTitle"),
     stage: document.getElementById("stage"),
     scroller: document.getElementById("floorScroll"),
-    stampBtn: document.getElementById("stampBtn"),
+    stampXBtn: document.getElementById("stampXBtn"),
+    stampWBtn: document.getElementById("stampWBtn"),
     eraserBtn: document.getElementById("eraserBtn"),
     swatches: document.getElementById("swatches"),
     colorInput: document.getElementById("colorInput"),
@@ -54,9 +55,11 @@
     activeIndex: 0,      // floor targeted by undo/reset (most in view / last tapped)
     selectedId: null,    // globally-selected marker
     selectedIndex: -1,   // index of the floor holding the selected marker
+    selectionFromStamp: false,  // was the selection auto-set by a fresh stamp?
     tool: "stamp",       // "stamp" | "eraser"
+    stampType: "x",      // "x" | "w" — which shape the stamp places
     color: "#e02424",
-    stampSize: 64,       // default new-X size, in image px
+    stampSize: 64,       // default new-marker size, in image px
   };
 
   // ---- small helpers ----
@@ -129,9 +132,9 @@
   // =========================================================================
   function addMarker(floor, x, y) {
     pushUndo(floor);
-    const m = { id: uid(), x, y, size: state.stampSize, color: state.color };
+    const m = { id: uid(), x, y, size: state.stampSize, color: state.color, type: state.stampType };
     floor.markers.push(m);
-    setSelected(floor, m.id);
+    setSelected(floor, m.id, true);
     saveFloor(floor);
     renderFloor(floor);
     updateSizeGroup();
@@ -162,18 +165,22 @@
   }
 
   // ---- selection ----
-  function setSelected(floor, id) {
+  // `fromStamp` marks a selection that came from a fresh stamp (vs. a deliberate tap
+  // on an existing mark). A shape-switch only converts a deliberately-selected mark.
+  function setSelected(floor, id, fromStamp) {
     const prev = selectedFloor();
     state.selectedId = id;
     state.selectedIndex = indexOf(floor);
+    state.selectionFromStamp = !!fromStamp;
     if (prev && prev !== floor) renderFloor(prev);
     renderFloor(floor);
   }
-  function selectMarker(floor, id) { setSelected(floor, id); updateSizeGroup(); }
+  function selectMarker(floor, id) { setSelected(floor, id, false); updateSizeGroup(); }
   function clearSelection() {
     const prev = selectedFloor();
     state.selectedId = null;
     state.selectedIndex = -1;
+    state.selectionFromStamp = false;
     if (prev) renderFloor(prev);
   }
   function deselect() {
@@ -187,12 +194,12 @@
     const svg = floor.svg;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     const selId = (indexOf(floor) === state.selectedIndex) ? state.selectedId : null;
-    for (const m of floor.markers) svg.appendChild(buildX(m, m.id === selId));
+    for (const m of floor.markers) svg.appendChild(buildMarker(m, m.id === selId));
     if (floor.countEl) floor.countEl.textContent = floor.markers.length ? " · " + floor.markers.length : "";
     updateButtons();
   }
 
-  function buildX(m, selected) {
+  function buildMarker(m, selected) {
     const g = document.createElementNS(SVGNS, "g");
     g.setAttribute("class", "mark" + (selected ? " selected" : ""));
     g.dataset.id = m.id;
@@ -200,9 +207,13 @@
     const h = m.size / 2;
     const sw = Math.max(4, m.size * 0.16); // stroke scales with size
 
-    // subtle backing so a light-colored X reads on a light blueprint
-    g.appendChild(lineGroup(m, h, sw + 6, "rgba(0,0,0,0.35)"));
-    g.appendChild(lineGroup(m, h, sw, m.color));
+    if (m.type === "w") {
+      g.appendChild(letterW(m, sw));
+    } else {
+      // subtle dark backing so a light-colored X reads on a light blueprint
+      g.appendChild(lineGroup(m, h, sw + 6, "rgba(0,0,0,0.35)"));
+      g.appendChild(lineGroup(m, h, sw, m.color));
+    }
 
     if (selected) {
       const box = document.createElementNS(SVGNS, "rect");
@@ -235,6 +246,25 @@
     l.setAttribute("x1", x1); l.setAttribute("y1", y1);
     l.setAttribute("x2", x2); l.setAttribute("y2", y2);
     return l;
+  }
+  // A bold "W" with a dark halo (stroke painted behind the fill), to match the X's
+  // haloed, color-themed look and stay legible on the blueprints.
+  function letterW(m, sw) {
+    const t = document.createElementNS(SVGNS, "text");
+    t.textContent = "W";
+    t.setAttribute("x", m.x);
+    t.setAttribute("y", m.y);
+    t.setAttribute("text-anchor", "middle");
+    t.setAttribute("dominant-baseline", "central");
+    t.setAttribute("font-family", "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif");
+    t.setAttribute("font-weight", "900");
+    t.setAttribute("font-size", m.size * 1.15);
+    t.setAttribute("fill", m.color);
+    t.setAttribute("stroke", "rgba(0,0,0,0.4)");
+    t.setAttribute("stroke-width", sw + 6);
+    t.setAttribute("paint-order", "stroke");
+    t.setAttribute("stroke-linejoin", "round");
+    return t;
   }
 
   // =========================================================================
@@ -482,7 +512,9 @@
     state.color = c;
     el.colorInput.value = normalizeHex(c) || el.colorInput.value;
     const m = selectedMarker();
-    if (m && m.color !== c) {
+    // Recolor a deliberately-selected mark; don't recolor one just auto-selected from a
+    // fresh stamp (so picking a color for the next mark doesn't rewrite the last one).
+    if (m && !state.selectionFromStamp && m.color !== c) {
       const f = selectedFloor();
       pushUndo(f);
       m.color = c;
@@ -496,11 +528,31 @@
   }
   function normalizeHex(c) { return /^#[0-9a-fA-F]{6}$/.test(c) ? c : null; }
 
-  // Remember the chosen color + default stamp size across sessions.
+  // Pick which shape the stamp places (X or W). Mirrors setColor: also converts the
+  // selected marker, so you can switch an existing mark's shape just as easily.
+  function setStampType(type) {
+    state.stampType = type;
+    if (state.tool !== "stamp") setTool("stamp");
+    const m = selectedMarker();
+    // Convert a deliberately-selected mark; don't flip one that was just auto-selected
+    // from a fresh stamp (so "stamp X's, switch to W" doesn't rewrite the last X).
+    if (m && !state.selectionFromStamp && (m.type || "x") !== type) {
+      const f = selectedFloor();
+      pushUndo(f);
+      m.type = type;
+      saveFloor(f);
+      renderFloor(f);
+    }
+    updateToolButtons();
+    savePrefs();
+  }
+
+  // Remember the chosen color, default stamp size, and shape across sessions.
   function savePrefs() {
     try {
       localStorage.setItem(STORAGE_PREFIX + "color", state.color);
       localStorage.setItem(STORAGE_PREFIX + "size", String(state.stampSize));
+      localStorage.setItem(STORAGE_PREFIX + "type", state.stampType);
     } catch (e) {}
   }
   function loadPrefs() {
@@ -509,19 +561,31 @@
       if (normalizeHex(c)) state.color = c;
       const s = Number(localStorage.getItem(STORAGE_PREFIX + "size"));
       if (s >= 16 && s <= 220) state.stampSize = s;
+      const t = localStorage.getItem(STORAGE_PREFIX + "type");
+      if (t === "x" || t === "w") state.stampType = t;
     } catch (e) {}
   }
 
   function setTool(tool) {
     state.tool = tool;
-    el.stampBtn.classList.toggle("active", tool === "stamp");
-    el.eraserBtn.classList.toggle("active", tool === "eraser");
-    el.stampBtn.setAttribute("aria-pressed", String(tool === "stamp"));
-    el.eraserBtn.setAttribute("aria-pressed", String(tool === "eraser"));
     if (tool === "eraser") deselect();
+    updateToolButtons();
     el.hint.textContent = tool === "eraser"
-      ? "Eraser: tap an X to remove it."
+      ? "Eraser: tap a mark to remove it."
       : "Tap to stamp · scroll for floors · double-tap to zoom.";
+  }
+
+  // Highlight the active tool/shape: X or W while stamping, else Eraser.
+  function updateToolButtons() {
+    const stamping = state.tool === "stamp";
+    const xActive = stamping && state.stampType === "x";
+    const wActive = stamping && state.stampType === "w";
+    el.stampXBtn.classList.toggle("active", xActive);
+    el.stampWBtn.classList.toggle("active", wActive);
+    el.eraserBtn.classList.toggle("active", state.tool === "eraser");
+    el.stampXBtn.setAttribute("aria-pressed", String(xActive));
+    el.stampWBtn.setAttribute("aria-pressed", String(wActive));
+    el.eraserBtn.setAttribute("aria-pressed", String(state.tool === "eraser"));
   }
 
   function updateButtons() {
@@ -833,7 +897,8 @@
     el.appFoot.textContent = "© Avery LLC · v" + APP_VERSION;
 
     el.backBtn.addEventListener("click", showHub);
-    el.stampBtn.addEventListener("click", () => setTool("stamp"));
+    el.stampXBtn.addEventListener("click", () => setStampType("x"));
+    el.stampWBtn.addEventListener("click", () => setStampType("w"));
     el.eraserBtn.addEventListener("click", () => setTool("eraser"));
     el.undoBtn.addEventListener("click", undo);
     el.redoBtn.addEventListener("click", redo);
@@ -864,7 +929,8 @@
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
       else if (e.key === "Escape") showHub();
       else if (e.key === "e") setTool("eraser");
-      else if (e.key === "s") setTool("stamp");
+      else if (e.key === "x" || e.key === "s") setStampType("x");
+      else if (e.key === "w") setStampType("w");
       else if ((e.key === "Delete" || e.key === "Backspace") && state.selectedId) {
         e.preventDefault();
         deleteMarker(selectedFloor(), state.selectedId);
