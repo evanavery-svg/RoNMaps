@@ -10,14 +10,17 @@ and mouse (Windows).
 > (`js/maps.js`), so adding a mission is just an entry + some image files.
 
 ## Features
+- **Scroll through the floors** — a mission's maps stack vertically; scroll up/down to move
+  between them (no dropdown). The label shows which floor is in view.
 - **Tap to stamp an X** where you cleared a room (default tool).
 - **Select & resize** any X — tap it, then use the size slider or drag the corner handle.
 - **Color** picker + quick preset swatches. Changing color also recolors the selected X.
 - **Eraser** — tap an X to remove it.
-- **Undo** and **Reset** (clear all on the current map).
-- **Zoom & pan** — pinch or mouse-wheel to zoom, drag to pan; **Fit** button re-centers.
+- **Undo** and **Reset** — act on the floor you're currently viewing.
+- **Zoom** — pinch (phone) or ctrl+scroll (Windows) to zoom in for precise placement.
 - **Saved per map** in your browser (localStorage) — marks survive refresh/close.
-- **Installable & offline** — "Add to Home Screen"; app shell + maps are cached.
+- **Installable & offline** — "Add to Home Screen"; app shell + maps are cached, and the app
+  fetches the newest version whenever you open it online.
 
 ## Swap in the real Sinuous Trail maps
 Sinuous Trail ships with three labeled **placeholder** floors so the app runs immediately.

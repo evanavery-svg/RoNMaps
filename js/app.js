@@ -1,14 +1,16 @@
-/* RoN Maps — Sinuous Trail marker tool.
- * Vanilla JS. Markers are SVG objects stored in image-pixel coordinates so they
+/* RoN Maps — marker tool.
+ * Vanilla JS. A mission's floors are stacked in one native vertical scroll; the browser
+ * handles scrolling between floors and pinch/ctrl-wheel zoom. Our only custom gesture is a
+ * TAP (stamp / select). Markers are SVG objects stored in image-pixel coordinates so they
  * stay locked to the map across screen sizes, zoom, and devices. */
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.1";
+  const APP_VERSION = "0.2";
   const SVGNS = "http://www.w3.org/2000/svg";
-  const STORAGE_PREFIX = "ronmaps:sinuous-trail:";
+  const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
-  const TAP_MOVE_TOLERANCE = 8;   // px of screen movement still counted as a tap
+  const TAP_MOVE_TOLERANCE = 10;  // px of screen movement still counted as a tap
   const TAP_TIME_LIMIT = 500;     // ms
   const PRESETS = ["#e02424", "#f5a524", "#16a34a", "#2563eb", "#111111", "#ffffff"];
 
@@ -19,12 +21,9 @@
     appFoot: document.getElementById("appFoot"),
     toolbar: document.getElementById("toolbar"),
     backBtn: document.getElementById("backBtn"),
+    missionTitle: document.getElementById("missionTitle"),
     stage: document.getElementById("stage"),
-    viewport: document.getElementById("viewport"),
-    canvas: document.getElementById("canvas"),
-    img: document.getElementById("mapImg"),
-    overlay: document.getElementById("overlay"),
-    mapSelect: document.getElementById("mapSelect"),
+    scroller: document.getElementById("floorScroll"),
     stampBtn: document.getElementById("stampBtn"),
     eraserBtn: document.getElementById("eraserBtn"),
     swatches: document.getElementById("swatches"),
@@ -33,66 +32,72 @@
     resetBtn: document.getElementById("resetBtn"),
     sizeGroup: document.getElementById("sizeGroup"),
     sizeRange: document.getElementById("sizeRange"),
-    zoomReset: document.getElementById("zoomReset"),
     hint: document.getElementById("hint"),
   };
 
   // ---- State ----
   const state = {
     mission: null,
-    mapId: null,
-    map: null,
-    markers: [],
-    undoStack: [],
-    selectedId: null,
-    tool: "stamp",        // "stamp" | "eraser"
+    floors: [],          // [{ map, markers, undoStack, section, wrap, img, svg }]
+    activeIndex: 0,      // floor targeted by undo/reset (most in view / last tapped)
+    selectedId: null,    // globally-selected marker
+    selectedIndex: -1,   // index of the floor holding the selected marker
+    tool: "stamp",       // "stamp" | "eraser"
     color: "#e02424",
-    stampSize: 64,        // default new-X size, in image px
-    // view transform (image px -> screen), applied via CSS transform on canvas
-    view: { scale: 1, tx: 0, ty: 0, fitScale: 1 },
+    stampSize: 64,       // default new-X size, in image px
   };
 
-  // =========================================================================
-  // Persistence
-  // =========================================================================
-  function storageKey(id) { return STORAGE_PREFIX + id; }
+  // ---- small helpers ----
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function indexOf(floor) { return state.floors.indexOf(floor); }
+  function activeFloor() { return state.floors[state.activeIndex] || null; }
+  function markerById(floor, id) { return floor && floor.markers.find((m) => m.id === id); }
+  function selectedFloor() { return state.selectedIndex >= 0 ? state.floors[state.selectedIndex] : null; }
+  function selectedMarker() {
+    const f = selectedFloor();
+    return f ? markerById(f, state.selectedId) : null;
+  }
+  function uid() { return "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
-  function loadMarkers(id) {
+  // =========================================================================
+  // Persistence (per floor, keyed by map id)
+  // =========================================================================
+  function loadMarkers(mapId) {
     try {
-      const raw = localStorage.getItem(storageKey(id));
+      const raw = localStorage.getItem(STORAGE_PREFIX + mapId);
       if (!raw) return [];
       const data = JSON.parse(raw);
       return Array.isArray(data) ? data.filter(validMarker) : [];
     } catch (e) { return []; }
   }
-
-  function saveMarkers() {
-    try {
-      localStorage.setItem(storageKey(state.mapId), JSON.stringify(state.markers));
-    } catch (e) { /* storage full/blocked — non-fatal */ }
+  function saveFloor(floor) {
+    try { localStorage.setItem(STORAGE_PREFIX + floor.map.id, JSON.stringify(floor.markers)); }
+    catch (e) { /* storage full/blocked — non-fatal */ }
   }
-
   function validMarker(m) {
     return m && typeof m.x === "number" && typeof m.y === "number" &&
       typeof m.size === "number" && typeof m.color === "string" && typeof m.id === "string";
   }
 
   // =========================================================================
-  // Undo (snapshot based)
+  // Undo (snapshot based, per floor)
   // =========================================================================
-  function pushUndo() {
-    state.undoStack.push(JSON.stringify(state.markers));
-    if (state.undoStack.length > UNDO_LIMIT) state.undoStack.shift();
+  function pushUndo(floor) {
+    floor.undoStack.push(JSON.stringify(floor.markers));
+    if (floor.undoStack.length > UNDO_LIMIT) floor.undoStack.shift();
     updateButtons();
   }
-
   function undo() {
-    if (!state.undoStack.length) return;
-    const snap = state.undoStack.pop();
-    try { state.markers = JSON.parse(snap); } catch (e) { state.markers = []; }
-    if (!state.markers.some((m) => m.id === state.selectedId)) state.selectedId = null;
-    saveMarkers();
-    render();
+    const f = activeFloor();
+    if (!f || !f.undoStack.length) return;
+    const snap = f.undoStack.pop();
+    let markers; try { markers = JSON.parse(snap); } catch (e) { markers = []; }
+    f.markers = markers;
+    if (state.selectedIndex === indexOf(f) && !f.markers.some((m) => m.id === state.selectedId)) {
+      clearSelection();
+    }
+    saveFloor(f);
+    renderFloor(f);
     updateButtons();
     updateSizeGroup();
   }
@@ -100,56 +105,64 @@
   // =========================================================================
   // Markers
   // =========================================================================
-  function uid() { return "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
-
-  function addMarker(x, y) {
-    pushUndo();
+  function addMarker(floor, x, y) {
+    pushUndo(floor);
     const m = { id: uid(), x, y, size: state.stampSize, color: state.color };
-    state.markers.push(m);
-    state.selectedId = m.id;
-    saveMarkers();
-    render();
+    floor.markers.push(m);
+    setSelected(floor, m.id);
+    saveFloor(floor);
+    renderFloor(floor);
     updateSizeGroup();
   }
-
-  function deleteMarker(id) {
-    const i = state.markers.findIndex((m) => m.id === id);
+  function deleteMarker(floor, id) {
+    const i = floor.markers.findIndex((m) => m.id === id);
     if (i < 0) return;
-    pushUndo();
-    state.markers.splice(i, 1);
-    if (state.selectedId === id) state.selectedId = null;
-    saveMarkers();
-    render();
+    pushUndo(floor);
+    floor.markers.splice(i, 1);
+    if (state.selectedId === id) clearSelection();
+    saveFloor(floor);
+    renderFloor(floor);
     updateSizeGroup();
   }
-
-  function selectMarker(id) {
-    state.selectedId = id;
-    render();
-    updateSizeGroup();
-  }
-
   function reset() {
-    if (!state.markers.length) return;
-    if (!confirm("Clear all marks on this map?")) return;
-    pushUndo();
-    state.markers = [];
-    state.selectedId = null;
-    saveMarkers();
-    render();
+    const f = activeFloor();
+    if (!f || !f.markers.length) return;
+    if (!confirm("Clear all marks on " + f.map.name + "?")) return;
+    pushUndo(f);
+    f.markers = [];
+    if (state.selectedIndex === indexOf(f)) clearSelection();
+    saveFloor(f);
+    renderFloor(f);
     updateSizeGroup();
+  }
+
+  // ---- selection ----
+  function setSelected(floor, id) {
+    const prev = selectedFloor();
+    state.selectedId = id;
+    state.selectedIndex = indexOf(floor);
+    if (prev && prev !== floor) renderFloor(prev);
+    renderFloor(floor);
+  }
+  function selectMarker(floor, id) { setSelected(floor, id); updateSizeGroup(); }
+  function clearSelection() {
+    const prev = selectedFloor();
+    state.selectedId = null;
+    state.selectedIndex = -1;
+    if (prev) renderFloor(prev);
+  }
+  function deselect() {
+    if (state.selectedId != null) { clearSelection(); updateSizeGroup(); }
   }
 
   // =========================================================================
   // Rendering
   // =========================================================================
-  function render() {
-    const svg = el.overlay;
+  function renderFloor(floor) {
+    const svg = floor.svg;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
-
-    for (const m of state.markers) {
-      svg.appendChild(buildX(m, m.id === state.selectedId));
-    }
+    const selId = (indexOf(floor) === state.selectedIndex) ? state.selectedId : null;
+    for (const m of floor.markers) svg.appendChild(buildX(m, m.id === selId));
     updateButtons();
   }
 
@@ -160,12 +173,10 @@
 
     const h = m.size / 2;
     const sw = Math.max(4, m.size * 0.16); // stroke scales with size
-    const stroke = m.color;
 
     // subtle backing so a light-colored X reads on a light blueprint
-    const halo = lineGroup(m, h, sw + 6, "rgba(0,0,0,0.35)");
-    g.appendChild(halo);
-    g.appendChild(lineGroup(m, h, sw, stroke));
+    g.appendChild(lineGroup(m, h, sw + 6, "rgba(0,0,0,0.35)"));
+    g.appendChild(lineGroup(m, h, sw, m.color));
 
     if (selected) {
       const box = document.createElementNS(SVGNS, "rect");
@@ -177,14 +188,13 @@
       const handle = document.createElementNS(SVGNS, "circle");
       handle.setAttribute("class", "sel-handle");
       handle.setAttribute("cx", m.x + h); handle.setAttribute("cy", m.y + h);
-      handle.setAttribute("r", Math.max(12, sw));
+      handle.setAttribute("r", Math.max(14, sw));
       handle.dataset.role = "resize";
       handle.dataset.id = m.id;
       g.appendChild(handle);
     }
     return g;
   }
-
   function lineGroup(m, h, sw, color) {
     const grp = document.createElementNS(SVGNS, "g");
     grp.setAttribute("stroke", color);
@@ -194,7 +204,6 @@
     grp.appendChild(makeLine(m.x + h, m.y - h, m.x - h, m.y + h));
     return grp;
   }
-
   function makeLine(x1, y1, x2, y2) {
     const l = document.createElementNS(SVGNS, "line");
     l.setAttribute("x1", x1); l.setAttribute("y1", y1);
@@ -203,214 +212,143 @@
   }
 
   // =========================================================================
-  // View transform (zoom / pan)
+  // Coordinates: screen -> image pixels for a given floor.
+  // Works under native pinch-zoom/scroll because clientX and the rect are both
+  // in layout-viewport CSS px.
   // =========================================================================
-  function applyView() {
-    const v = state.view;
-    el.canvas.style.transform = `translate(${v.tx}px, ${v.ty}px) scale(${v.scale})`;
-    el.zoomReset.hidden = Math.abs(v.scale - v.fitScale) < 0.01 &&
-      Math.abs(v.tx - v.fitTx) < 1 && Math.abs(v.ty - v.fitTy) < 1;
-  }
-
-  function fitView() {
-    const map = state.map;
-    if (!map) return;
-    const vw = el.viewport.clientWidth;
-    const vh = el.viewport.clientHeight;
-    const iw = map.width, ih = map.height;
-    const scale = Math.min(vw / iw, vh / ih);
-    const tx = (vw - iw * scale) / 2;
-    const ty = (vh - ih * scale) / 2;
-    state.view = { scale, tx, ty, fitScale: scale, fitTx: tx, fitTy: ty };
-    // size the canvas box to the image's natural pixels; transform scales it down
-    el.canvas.style.width = iw + "px";
-    el.canvas.style.height = ih + "px";
-    el.overlay.setAttribute("viewBox", `0 0 ${iw} ${ih}`);
-    applyView();
-  }
-
-  function clampView() {
-    const v = state.view;
-    const min = v.fitScale;
-    if (v.scale < min) v.scale = min;
-    if (v.scale > min * 12) v.scale = min * 12;
-  }
-
-  function zoomAt(clientX, clientY, factor) {
-    const v = state.view;
-    const rect = el.viewport.getBoundingClientRect();
-    const px = clientX - rect.left, py = clientY - rect.top;
-    // image point under cursor before zoom
-    const ix = (px - v.tx) / v.scale;
-    const iy = (py - v.ty) / v.scale;
-    v.scale *= factor;
-    clampView();
-    // keep that image point under the cursor
-    v.tx = px - ix * v.scale;
-    v.ty = py - iy * v.scale;
-    applyView();
-  }
-
-  // screen -> image coordinates
-  function toImage(clientX, clientY) {
-    const v = state.view;
-    const rect = el.viewport.getBoundingClientRect();
+  function toImage(floor, clientX, clientY) {
+    const rect = floor.img.getBoundingClientRect();
     return {
-      x: (clientX - rect.left - v.tx) / v.scale,
-      y: (clientY - rect.top - v.ty) / v.scale,
+      x: (clientX - rect.left) / rect.width * floor.map.width,
+      y: (clientY - rect.top) / rect.height * floor.map.height,
     };
   }
+  function inBounds(floor, p) {
+    return p.x >= 0 && p.y >= 0 && p.x <= floor.map.width && p.y <= floor.map.height;
+  }
+  function floorFromEvent(e) {
+    const secEl = e.target.closest && e.target.closest(".floor-section");
+    if (!secEl) return null;
+    return state.floors[Number(secEl.dataset.index)] || null;
+  }
 
   // =========================================================================
-  // Pointer / gesture handling
+  // Pointer handling — tap to stamp/select; drag a corner handle to resize.
+  // We do NOT pointer-capture for taps, so native scroll/zoom keep working; a
+  // scroll fires pointercancel, which cancels the pending tap.
   // =========================================================================
-  const pointers = new Map();
-  let gesture = null; // active gesture descriptor
+  let press = null;
 
   function onPointerDown(e) {
-    el.viewport.setPointerCapture?.(e.pointerId);
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const floor = floorFromEvent(e);
+    if (!floor) { press = null; return; }
 
-    if (pointers.size === 2) {
-      // start pinch
-      const pts = [...pointers.values()];
-      gesture = {
-        type: "pinch",
-        startDist: dist(pts[0], pts[1]),
-        startScale: state.view.scale,
-        cx: (pts[0].x + pts[1].x) / 2,
-        cy: (pts[0].y + pts[1].y) / 2,
-      };
-      return;
-    }
+    const handle = e.target.closest && e.target.closest("[data-role='resize']");
+    const mark = e.target.closest && e.target.closest(".mark");
 
-    const target = e.target.closest ? e.target.closest("[data-role='resize'], .mark") : null;
-    const startImg = toImage(e.clientX, e.clientY);
-
-    if (target && target.dataset.role === "resize") {
-      const m = markerById(target.dataset.id);
-      pushUndo();
-      gesture = { type: "resize", id: m.id, startImg, startSize: m.size, moved: false, changed: false };
-    } else if (target && target.classList.contains("mark")) {
-      const m = markerById(target.dataset.id);
-      gesture = {
-        type: "marker-press", id: m.id, startImg,
-        startX: m.x, startY: m.y, downX: e.clientX, downY: e.clientY,
-        downTime: performance.now(), moved: false, changed: false,
+    if (handle) {
+      const m = markerById(floor, handle.dataset.id);
+      if (!m) { press = null; return; }
+      e.preventDefault();
+      el.scroller.setPointerCapture && el.scroller.setPointerCapture(e.pointerId);
+      pushUndo(floor);
+      press = { kind: "resize", floor, id: m.id, changed: false };
+    } else if (mark) {
+      press = {
+        kind: "mark", floor, id: mark.dataset.id,
+        downX: e.clientX, downY: e.clientY, downTime: performance.now(), moved: false,
       };
     } else {
-      gesture = {
-        type: "canvas-press", startImg,
-        startTx: state.view.tx, startTy: state.view.ty,
+      press = {
+        kind: "empty", floor, startImg: toImage(floor, e.clientX, e.clientY),
         downX: e.clientX, downY: e.clientY, downTime: performance.now(), moved: false,
       };
     }
   }
 
   function onPointerMove(e) {
-    if (!pointers.has(e.pointerId)) return;
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    if (gesture && gesture.type === "pinch" && pointers.size >= 2) {
-      const pts = [...pointers.values()];
-      const d = dist(pts[0], pts[1]);
-      const factor = (d / gesture.startDist) * (gesture.startScale / state.view.scale);
-      zoomAt(gesture.cx, gesture.cy, factor);
-      return;
-    }
-    if (!gesture) return;
-
-    if (gesture.type === "resize") {
-      const img = toImage(e.clientX, e.clientY);
-      const m = markerById(gesture.id);
+    if (!press) return;
+    if (press.kind === "resize") {
+      e.preventDefault();
+      const m = markerById(press.floor, press.id);
       if (!m) return;
-      const dx = img.x - m.x, dy = img.y - m.y;
-      const newSize = clamp(Math.max(Math.abs(dx), Math.abs(dy)) * 2, 16, 4000);
-      m.size = newSize;
-      gesture.changed = true;
-      render();
+      const img = toImage(press.floor, e.clientX, e.clientY);
+      m.size = clamp(Math.max(Math.abs(img.x - m.x), Math.abs(img.y - m.y)) * 2, 16, 8000);
+      press.changed = true;
+      renderFloor(press.floor);
       el.sizeRange.value = Math.round(Math.min(220, m.size));
       return;
     }
-
-    const movedFar = Math.hypot(e.clientX - gesture.downX, e.clientY - gesture.downY) > TAP_MOVE_TOLERANCE;
-
-    if (gesture.type === "marker-press") {
-      if (movedFar) {
-        if (!gesture.moved) { pushUndo(); gesture.moved = true; }
-        const img = toImage(e.clientX, e.clientY);
-        const m = markerById(gesture.id);
-        if (m) {
-          m.x = gesture.startX + (img.x - gesture.startImg.x);
-          m.y = gesture.startY + (img.y - gesture.startImg.y);
-          gesture.changed = true;
-          if (state.selectedId !== m.id) { state.selectedId = m.id; }
-          render();
-        }
-      }
-    } else if (gesture.type === "canvas-press") {
-      if (movedFar) {
-        gesture.moved = true;
-        state.view.tx = gesture.startTx + (e.clientX - gesture.downX);
-        state.view.ty = gesture.startTy + (e.clientY - gesture.downY);
-        applyView();
-      }
+    if (Math.hypot(e.clientX - press.downX, e.clientY - press.downY) > TAP_MOVE_TOLERANCE) {
+      press.moved = true;
     }
   }
 
   function onPointerUp(e) {
-    el.viewport.releasePointerCapture?.(e.pointerId);
-    pointers.delete(e.pointerId);
+    if (!press) return;
+    el.scroller.releasePointerCapture && press.kind === "resize" &&
+      el.scroller.releasePointerCapture(e.pointerId);
+    const p = press;
+    press = null;
 
-    if (gesture && gesture.type === "pinch") {
-      gesture = pointers.size === 1 ? null : gesture;
-      if (pointers.size < 2) gesture = null;
+    if (p.kind === "resize") {
+      commitResize(p);
       return;
     }
-    if (!gesture) return;
 
-    const dt = performance.now() - (gesture.downTime || 0);
-    const isTap = !gesture.moved && dt < TAP_TIME_LIMIT;
+    const dt = performance.now() - p.downTime;
+    const isTap = !p.moved && dt < TAP_TIME_LIMIT;
+    if (!isTap) return;
 
-    if (gesture.type === "resize") {
-      if (gesture.changed) { saveMarkers(); } else { state.undoStack.pop(); }
-      updateButtons();
-    } else if (gesture.type === "marker-press") {
-      if (isTap) {
-        if (state.tool === "eraser") deleteMarker(gesture.id);
-        else selectMarker(gesture.id);
-      } else if (gesture.changed) {
-        saveMarkers();
-      }
-    } else if (gesture.type === "canvas-press") {
-      if (isTap) {
-        if (state.tool === "stamp") {
-          const p = gesture.startImg;
-          if (inBounds(p)) addMarker(p.x, p.y);
-          else deselect();
-        } else {
-          deselect();
-        }
-      }
-    }
-    gesture = null;
-  }
-
-  function deselect() {
-    if (state.selectedId != null) {
-      state.selectedId = null;
-      render();
-      updateSizeGroup();
+    setActiveFloor(indexOf(p.floor));
+    if (p.kind === "mark") {
+      if (state.tool === "eraser") deleteMarker(p.floor, p.id);
+      else selectMarker(p.floor, p.id);
+    } else { // empty
+      if (state.tool === "stamp" && inBounds(p.floor, p.startImg)) addMarker(p.floor, p.startImg.x, p.startImg.y);
+      else deselect();
     }
   }
 
-  function inBounds(p) {
-    return p.x >= 0 && p.y >= 0 && p.x <= state.map.width && p.y <= state.map.height;
+  function onPointerCancel() {
+    if (press && press.kind === "resize") commitResize(press);
+    press = null;
   }
 
-  function markerById(id) { return state.markers.find((m) => m.id === id); }
-  function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
-  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function commitResize(p) {
+    const m = markerById(p.floor, p.id);
+    if (p.changed) {
+      if (m) state.stampSize = m.size;
+      saveFloor(p.floor);
+    } else {
+      p.floor.undoStack.pop(); // nothing changed — discard the snapshot we pushed
+    }
+    updateButtons();
+  }
+
+  // =========================================================================
+  // Active floor (targets undo/reset) — tracked by scroll via IntersectionObserver
+  // =========================================================================
+  const ratios = new Map();
+  let io = null;
+  function ensureObserver() {
+    if (io) return io;
+    io = new IntersectionObserver((entries) => {
+      for (const en of entries) {
+        ratios.set(Number(en.target.dataset.index), en.isIntersecting ? en.intersectionRatio : 0);
+      }
+      let best = -1, bestR = -1;
+      ratios.forEach((r, i) => { if (r > bestR) { bestR = r; best = i; } });
+      if (best >= 0 && best !== state.activeIndex) setActiveFloor(best);
+    }, { root: el.scroller, threshold: [0, 0.25, 0.5, 0.75, 1] });
+    return io;
+  }
+  function setActiveFloor(i) {
+    if (i < 0 || i >= state.floors.length) return;
+    state.activeIndex = i;
+    state.floors.forEach((f, idx) => f.section.classList.toggle("active", idx === i));
+    updateButtons();
+  }
 
   // =========================================================================
   // UI wiring
@@ -431,22 +369,19 @@
   function setColor(c) {
     state.color = c;
     el.colorInput.value = normalizeHex(c) || el.colorInput.value;
-    // recolor the selected marker too, if any
-    const m = markerById(state.selectedId);
+    const m = selectedMarker();
     if (m && m.color !== c) {
-      pushUndo();
+      const f = selectedFloor();
+      pushUndo(f);
       m.color = c;
-      saveMarkers();
-      render();
+      saveFloor(f);
+      renderFloor(f);
     }
     for (const b of el.swatches.children) {
       b.classList.toggle("active", b.style.getPropertyValue("--sw").trim().toLowerCase() === c.toLowerCase());
     }
   }
-
-  function normalizeHex(c) {
-    return /^#[0-9a-fA-F]{6}$/.test(c) ? c : null;
-  }
+  function normalizeHex(c) { return /^#[0-9a-fA-F]{6}$/.test(c) ? c : null; }
 
   function setTool(tool) {
     state.tool = tool;
@@ -457,16 +392,17 @@
     if (tool === "eraser") deselect();
     el.hint.textContent = tool === "eraser"
       ? "Eraser: tap an X to remove it."
-      : "Tap a room to stamp an X. Tap an X to select & resize it.";
+      : "Tap a room to stamp an X · scroll for other floors · pinch to zoom.";
   }
 
   function updateButtons() {
-    el.undoBtn.disabled = state.undoStack.length === 0;
-    el.resetBtn.disabled = state.markers.length === 0;
+    const f = activeFloor();
+    el.undoBtn.disabled = !f || f.undoStack.length === 0;
+    el.resetBtn.disabled = !f || f.markers.length === 0;
   }
 
   function updateSizeGroup() {
-    const m = markerById(state.selectedId);
+    const m = selectedMarker();
     if (m) {
       el.sizeGroup.hidden = false;
       el.sizeRange.value = Math.round(clamp(m.size, 16, 220));
@@ -474,22 +410,22 @@
       el.sizeGroup.hidden = true;
     }
   }
-
   function onSizeInput() {
-    const m = markerById(state.selectedId);
+    const m = selectedMarker();
     const val = Number(el.sizeRange.value);
     if (m) {
-      if (!onSizeInput._dragging) { pushUndo(); onSizeInput._dragging = true; }
+      const f = selectedFloor();
+      if (!onSizeInput._dragging) { pushUndo(f); onSizeInput._dragging = true; }
       m.size = val;
-      render();
+      renderFloor(f);
     } else {
       state.stampSize = val;
     }
   }
   function onSizeCommit() {
     if (onSizeInput._dragging) {
-      const m = markerById(state.selectedId);
-      if (m) { state.stampSize = m.size; saveMarkers(); }
+      const m = selectedMarker();
+      if (m) { state.stampSize = m.size; saveFloor(selectedFloor()); }
       onSizeInput._dragging = false;
       updateButtons();
     }
@@ -528,68 +464,95 @@
   }
 
   function showHub() {
-    deselect();
+    teardownFloors();
     state.mission = null;
     el.stage.hidden = true;
     el.toolbar.hidden = true;
     el.hub.hidden = false;
-    el.img.removeAttribute("src");
-    try { localStorage.removeItem(STORAGE_PREFIX + "lastMission"); } catch (e) {}
   }
 
   function openMission(mission) {
     if (!mission.maps.length) return;
     state.mission = mission;
+    el.missionTitle.textContent = mission.name;
     el.hub.hidden = true;
     el.toolbar.hidden = false;
-    el.stage.hidden = false;         // must be visible before fitView measures it
-    populateFloorSelect(mission);
-    try { localStorage.setItem(STORAGE_PREFIX + "lastMission", String(mission.number)); } catch (e) {}
-    // resume the last floor viewed in this mission, else the first
-    let last = null;
-    try { last = localStorage.getItem(STORAGE_PREFIX + "lastMap:" + mission.id); } catch (e) {}
-    const start = mission.maps.find((m) => m.id === last) || mission.maps[0];
-    loadMap(start.id);
+    el.stage.hidden = false;      // must be visible before we measure/observe
+    buildFloors(mission);
+    clearSelection();
+    updateSizeGroup();
+    setTool(state.tool);
+    el.scroller.scrollTop = 0;
+    setActiveFloor(0);
   }
 
   // =========================================================================
-  // Map loading
+  // Build / tear down the stacked floors for a mission
   // =========================================================================
-  function populateFloorSelect(mission) {
-    el.mapSelect.innerHTML = "";
-    for (const m of mission.maps) {
-      const opt = document.createElement("option");
-      opt.value = m.id;
-      opt.textContent = m.name;
-      el.mapSelect.appendChild(opt);
-    }
+  function buildFloors(mission) {
+    teardownFloors();
+    ensureObserver();
+    state.floors = [];
+    el.scroller.innerHTML = "";
+
+    mission.maps.forEach((map, idx) => {
+      const section = document.createElement("section");
+      section.className = "floor-section";
+      section.dataset.index = String(idx);
+
+      const label = document.createElement("div");
+      label.className = "floor-label";
+      label.textContent = map.name;
+
+      const wrap = document.createElement("div");
+      wrap.className = "floor-wrap";
+
+      const img = document.createElement("img");
+      img.className = "map-img";
+      img.alt = mission.name + " — " + map.name;
+      img.draggable = false;
+
+      const svg = document.createElementNS(SVGNS, "svg");
+      svg.setAttribute("class", "overlay");
+      svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+      wrap.append(img, svg);
+      section.append(label, wrap);
+      el.scroller.appendChild(section);
+
+      const floor = { map, markers: loadMarkers(map.id), undoStack: [], section, wrap, img, svg };
+      state.floors.push(floor);
+
+      const applyDims = (w, h) => {
+        svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+        wrap.style.aspectRatio = w + " / " + h;
+      };
+      if (map.width && map.height) applyDims(map.width, map.height);
+
+      img.onload = () => {
+        if (!map.width || !map.height) {
+          map.width = img.naturalWidth || 1000;
+          map.height = img.naturalHeight || 1000;
+          applyDims(map.width, map.height);
+        }
+        renderFloor(floor);
+      };
+      img.src = map.src;
+
+      renderFloor(floor);
+      io.observe(section);
+    });
   }
 
-  function loadMap(id) {
-    const map = state.mission && state.mission.maps.find((m) => m.id === id);
-    if (!map) return;
-    state.mapId = id;
-    state.map = map;
-    state.markers = loadMarkers(id);
-    state.undoStack = [];
+  function teardownFloors() {
+    if (io) io.disconnect();
+    ratios.clear();
+    state.floors = [];
+    state.activeIndex = 0;
     state.selectedId = null;
-    el.mapSelect.value = id;
-
-    el.img.onload = () => {
-      // if the manifest lacked dimensions, adopt the image's natural size
-      if (!map.width || !map.height) {
-        map.width = el.img.naturalWidth || map.width || 1000;
-        map.height = el.img.naturalHeight || map.height || 1000;
-      }
-      fitView();
-      render();
-      updateButtons();
-      updateSizeGroup();
-    };
-    el.img.alt = state.mission.name + " — " + map.name;
-    el.img.src = map.src;
-
-    try { localStorage.setItem(STORAGE_PREFIX + "lastMap:" + state.mission.id, id); } catch (e) {}
+    state.selectedIndex = -1;
+    press = null;
+    el.scroller.innerHTML = "";
   }
 
   // =========================================================================
@@ -602,7 +565,6 @@
     el.appFoot.textContent = "© Avery LLC · v" + APP_VERSION;
 
     el.backBtn.addEventListener("click", showHub);
-    el.mapSelect.addEventListener("change", () => loadMap(el.mapSelect.value));
     el.stampBtn.addEventListener("click", () => setTool("stamp"));
     el.eraserBtn.addEventListener("click", () => setTool("eraser"));
     el.undoBtn.addEventListener("click", undo);
@@ -611,31 +573,23 @@
     el.sizeRange.addEventListener("input", onSizeInput);
     el.sizeRange.addEventListener("change", onSizeCommit);
     el.sizeRange.addEventListener("pointerup", onSizeCommit);
-    el.zoomReset.addEventListener("click", () => { fitView(); });
 
-    // pointer events on the viewport
-    el.viewport.addEventListener("pointerdown", onPointerDown);
-    el.viewport.addEventListener("pointermove", onPointerMove);
-    el.viewport.addEventListener("pointerup", onPointerUp);
-    el.viewport.addEventListener("pointercancel", onPointerUp);
-    el.viewport.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 1 / 1.12);
-    }, { passive: false });
-    // block context menu on long-press / right click over the map
-    el.viewport.addEventListener("contextmenu", (e) => e.preventDefault());
+    // pointer events (delegated on the scroll container)
+    el.scroller.addEventListener("pointerdown", onPointerDown);
+    el.scroller.addEventListener("pointermove", onPointerMove);
+    el.scroller.addEventListener("pointerup", onPointerUp);
+    el.scroller.addEventListener("pointercancel", onPointerCancel);
+    el.scroller.addEventListener("contextmenu", (e) => e.preventDefault());
 
-    window.addEventListener("resize", () => { if (state.mission && state.map) fitView(); });
     document.addEventListener("keydown", (e) => {
-      if (el.hub.hidden === false) {
-        if (e.key === "Escape") return; // nothing to do on the hub
-      }
+      if (!el.hub.hidden) return; // no shortcuts on the hub
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
-      else if (e.key === "Escape" && state.mission) showHub();
+      else if (e.key === "Escape") showHub();
       else if (e.key === "e") setTool("eraser");
       else if (e.key === "s") setTool("stamp");
       else if ((e.key === "Delete" || e.key === "Backspace") && state.selectedId) {
-        e.preventDefault(); deleteMarker(state.selectedId);
+        e.preventDefault();
+        deleteMarker(selectedFloor(), state.selectedId);
       }
     });
 
@@ -653,8 +607,6 @@
       try {
         const reg = await navigator.serviceWorker.register("service-worker.js", { updateViaCache: "none" });
 
-        // Only reload for updates that arrive AFTER this page already had a controller,
-        // so the very first visit doesn't reload itself.
         const hadController = !!navigator.serviceWorker.controller;
         let reloaded = false;
         navigator.serviceWorker.addEventListener("controllerchange", () => {
@@ -663,7 +615,6 @@
           window.location.reload();
         });
 
-        // If a new worker installs while we're open, ask it to activate immediately.
         reg.addEventListener("updatefound", () => {
           const nw = reg.installing;
           if (!nw) return;
@@ -674,7 +625,6 @@
           });
         });
 
-        // Check for a new version right now, and again whenever the app regains focus.
         reg.update();
         document.addEventListener("visibilitychange", () => {
           if (document.visibilityState === "visible") reg.update();

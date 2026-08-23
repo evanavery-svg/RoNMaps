@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#1b1d22" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -30,8 +30,7 @@
       <button id="backBtn" class="tool" title="Back to missions">‹<span class="tool-txt"> Missions</span></button>
     </div>
     <div class="tb-group tb-maps">
-      <label class="tb-label" for="mapSelect">Floor</label>
-      <select id="mapSelect" class="map-select" aria-label="Select floor"></select>
+      <span class="tb-title" id="missionTitle"></span>
     </div>
 
     <div class="tb-group">
@@ -63,14 +62,8 @@
   </header>
 
   <main class="stage" id="stage" hidden>
-    <div class="viewport" id="viewport">
-      <div class="canvas" id="canvas">
-        <img id="mapImg" class="map-img" alt="" draggable="false" />
-        <svg id="overlay" class="overlay" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
-      </div>
-    </div>
-    <div class="hint" id="hint">Tap a room to stamp an X. Tap an X to select &amp; resize it.</div>
-    <button class="zoom-reset" id="zoomReset" title="Fit map to screen" hidden>Fit</button>
+    <div class="floor-scroll" id="floorScroll"></div>
+    <div class="hint" id="hint">Tap a room to stamp an X · scroll for other floors · pinch to zoom.</div>
   </main>
 
   <script src="js/maps.js"></script>

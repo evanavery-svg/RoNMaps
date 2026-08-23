@@ -157,26 +157,53 @@ body {
 
 .tb-size input[type="range"] { width: 140px; accent-color: var(--accent); height: var(--tap); }
 
-/* ---------------- Stage ---------------- */
+.tb-title {
+  font-size: 15px; font-weight: 650; color: var(--text);
+  max-width: 40vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---------------- Stage (stacked scroll of floors) ---------------- */
 .stage {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  background:
-    radial-gradient(circle at 50% 40%, #33373f 0, var(--stage) 70%);
+  background: var(--stage);
   overflow: hidden;
 }
-.viewport {
+.floor-scroll {
   position: absolute;
   inset: 0;
-  touch-action: none;   /* we handle all gestures */
-  cursor: crosshair;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: 72px;   /* room so the last floor clears the hint bubble */
 }
-.canvas {
-  position: absolute;
-  top: 0; left: 0;
-  transform-origin: 0 0;
-  will-change: transform;
+.floor-section { position: relative; }
+.floor-label {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 8px 14px;
+  font-size: 13px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(15, 17, 21, .82);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+}
+.floor-section.active .floor-label { color: var(--text); }
+.floor-section.active .floor-label::after {
+  content: "  ● in view";
+  color: var(--accent);
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+.floor-wrap {
+  position: relative;
+  width: 100%;
+  background: #fff;      /* letterbox behind a map that isn't loaded yet */
 }
 .map-img {
   display: block;
@@ -184,14 +211,14 @@ body {
   height: 100%;
   -webkit-user-drag: none;
   user-select: none;
-  box-shadow: 0 6px 30px rgba(0,0,0,.5);
   background: #fff;
 }
 .overlay {
   position: absolute;
-  top: 0; left: 0;
+  inset: 0;
   width: 100%; height: 100%;
   overflow: visible;
+  pointer-events: none;   /* only the marks themselves are interactive */
 }
 
 .mark { pointer-events: all; cursor: pointer; }
@@ -208,30 +235,21 @@ body {
   stroke: var(--accent);
   stroke-width: 3;
   cursor: nwse-resize;
+  touch-action: none;     /* dragging the handle resizes instead of scrolling */
 }
 
 .hint {
   position: absolute;
   left: 50%; bottom: 12px;
   transform: translateX(-50%);
-  background: rgba(0,0,0,.6);
+  background: rgba(0,0,0,.72);
   color: #fff;
   font-size: 13px;
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-radius: 999px;
   pointer-events: none;
-  max-width: 90%;
+  max-width: 92%;
   text-align: center;
-}
-.zoom-reset {
-  position: absolute;
-  right: 12px; bottom: 12px;
-  min-height: var(--tap); padding: 0 16px;
-  background: var(--toolbar);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 14px; cursor: pointer;
 }
 
 @media (max-width: 560px) {
@@ -239,4 +257,5 @@ body {
   .tb-group + .tb-group { padding-left: 6px; }
   .tb-size input[type="range"] { width: 96px; }
   .hint { font-size: 12px; }
+  .tb-title { max-width: 34vw; }
 }
