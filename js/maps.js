@@ -33,9 +33,9 @@ const MISSION_DATA = {
   7: {
     name: "Sinuous Trail",
     maps: [
-      { id: "sinuous-trail-ground",  name: "Ground",  src: "assets/maps/sinuous-trail-ground.png" },
-      { id: "sinuous-trail-floor-1", name: "Floor 1", src: "assets/maps/sinuous-trail-floor-1.png" },
-      { id: "sinuous-trail-floor-2", name: "Floor 2", src: "assets/maps/sinuous-trail-floor-2.png" },
+      { id: "sinuous-trail-ground",  name: "Ground",  src: "assets/maps/SinousTrailGround.png",  width: 1080, height: 1920 },
+      { id: "sinuous-trail-floor-1", name: "Floor 1", src: "assets/maps/SinuousTrailFloor1.png", width: 1920, height: 1080 },
+      { id: "sinuous-trail-floor-2", name: "Floor 2", src: "assets/maps/SinuousTrailFloor2.png", width: 1080, height: 1920 },
     ],
   },
 

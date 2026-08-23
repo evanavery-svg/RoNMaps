@@ -1,6 +1,6 @@
 /* RoN Maps service worker — offline app shell + cached maps.
  * Bump CACHE_VERSION whenever you change the app shell or add/replace maps. */
-const CACHE_VERSION = "ronmaps-v2";
+const CACHE_VERSION = "ronmaps-v3";
 
 const CACHE_ASSETS = [
   "./",
@@ -13,9 +13,9 @@ const CACHE_ASSETS = [
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   // --- map images (keep in sync with js/maps.js) ---
-  "./assets/maps/sinuous-trail-ground.png",
-  "./assets/maps/sinuous-trail-floor-1.png",
-  "./assets/maps/sinuous-trail-floor-2.png",
+  "./assets/maps/SinousTrailGround.png",
+  "./assets/maps/SinuousTrailFloor1.png",
+  "./assets/maps/SinuousTrailFloor2.png",
 ];
 
 self.addEventListener("install", (event) => {
