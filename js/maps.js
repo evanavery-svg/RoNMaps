@@ -69,6 +69,10 @@ const MISSION_DATA = {
 
   // Add more missions here as you upload them, e.g.:
   // 1:  { name: "…", maps: [ … ] },
+  //
+  // You can also NAME a mission before you have its maps — just give it a name and no maps:
+  //   3:  { name: "Twisted Nerve" },
+  // It shows in the hub with its real name but stays "Coming soon" (locked) until you add maps.
 };
 
 // Build the full list of 26 mission slots. Slots without data show as "Coming soon".

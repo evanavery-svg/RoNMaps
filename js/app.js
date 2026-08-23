@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.2";
+  const APP_VERSION = "0.3";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -18,6 +18,13 @@
   const el = {
     hub: document.getElementById("hub"),
     missionGrid: document.getElementById("missionGrid"),
+    missionSearch: document.getElementById("missionSearch"),
+    hideComingSoon: document.getElementById("hideComingSoon"),
+    hubEmpty: document.getElementById("hubEmpty"),
+    installBtn: document.getElementById("installBtn"),
+    iosHint: document.getElementById("iosHint"),
+    offlineBadge: document.getElementById("offlineBadge"),
+    toast: document.getElementById("toast"),
     appFoot: document.getElementById("appFoot"),
     toolbar: document.getElementById("toolbar"),
     backBtn: document.getElementById("backBtn"),
@@ -113,6 +120,7 @@
     saveFloor(floor);
     renderFloor(floor);
     updateSizeGroup();
+    buzz(15);
   }
   function deleteMarker(floor, id) {
     const i = floor.markers.findIndex((m) => m.id === id);
@@ -123,7 +131,9 @@
     saveFloor(floor);
     renderFloor(floor);
     updateSizeGroup();
+    buzz([10, 30, 10]);
   }
+  function buzz(pattern) { try { navigator.vibrate && navigator.vibrate(pattern); } catch (e) {} }
   function reset() {
     const f = activeFloor();
     if (!f || !f.markers.length) return;
@@ -163,6 +173,7 @@
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     const selId = (indexOf(floor) === state.selectedIndex) ? state.selectedId : null;
     for (const m of floor.markers) svg.appendChild(buildX(m, m.id === selId));
+    if (floor.countEl) floor.countEl.textContent = floor.markers.length ? " · " + floor.markers.length : "";
     updateButtons();
   }
 
@@ -253,6 +264,16 @@
       el.scroller.setPointerCapture && el.scroller.setPointerCapture(e.pointerId);
       pushUndo(floor);
       press = { kind: "resize", floor, id: m.id, changed: false };
+    } else if (mark && state.tool === "stamp" &&
+               mark.dataset.id === state.selectedId && indexOf(floor) === state.selectedIndex) {
+      // Drag the already-selected X to reposition it (capture so it won't scroll).
+      el.scroller.setPointerCapture && el.scroller.setPointerCapture(e.pointerId);
+      const m = markerById(floor, mark.dataset.id);
+      press = {
+        kind: "move", floor, id: mark.dataset.id,
+        startImg: toImage(floor, e.clientX, e.clientY), startX: m.x, startY: m.y,
+        downX: e.clientX, downY: e.clientY, downTime: performance.now(), moved: false, changed: false,
+      };
     } else if (mark) {
       press = {
         kind: "mark", floor, id: mark.dataset.id,
@@ -279,6 +300,20 @@
       el.sizeRange.value = Math.round(Math.min(220, m.size));
       return;
     }
+    if (press.kind === "move") {
+      const far = Math.hypot(e.clientX - press.downX, e.clientY - press.downY) > TAP_MOVE_TOLERANCE;
+      if (!far && !press.changed) return;
+      e.preventDefault();
+      const m = markerById(press.floor, press.id);
+      if (!m) return;
+      if (!press.changed) { pushUndo(press.floor); press.changed = true; }
+      const img = toImage(press.floor, e.clientX, e.clientY);
+      m.x = clamp(press.startX + (img.x - press.startImg.x), 0, press.floor.map.width);
+      m.y = clamp(press.startY + (img.y - press.startImg.y), 0, press.floor.map.height);
+      press.moved = true;
+      renderFloor(press.floor);
+      return;
+    }
     if (Math.hypot(e.clientX - press.downX, e.clientY - press.downY) > TAP_MOVE_TOLERANCE) {
       press.moved = true;
     }
@@ -286,15 +321,14 @@
 
   function onPointerUp(e) {
     if (!press) return;
-    el.scroller.releasePointerCapture && press.kind === "resize" &&
-      el.scroller.releasePointerCapture(e.pointerId);
+    if (press.kind === "resize" || press.kind === "move") {
+      el.scroller.releasePointerCapture && el.scroller.releasePointerCapture(e.pointerId);
+    }
     const p = press;
     press = null;
 
-    if (p.kind === "resize") {
-      commitResize(p);
-      return;
-    }
+    if (p.kind === "resize") { commitResize(p); return; }
+    if (p.kind === "move") { commitDrag(p); return; }
 
     const dt = performance.now() - p.downTime;
     const isTap = !p.moved && dt < TAP_TIME_LIMIT;
@@ -312,6 +346,7 @@
 
   function onPointerCancel() {
     if (press && press.kind === "resize") commitResize(press);
+    else if (press && press.kind === "move") commitDrag(press);
     press = null;
   }
 
@@ -323,6 +358,11 @@
     } else {
       p.floor.undoStack.pop(); // nothing changed — discard the snapshot we pushed
     }
+    updateButtons();
+  }
+
+  function commitDrag(p) {
+    if (p.changed) saveFloor(p.floor); // undo snapshot was pushed on first move
     updateButtons();
   }
 
@@ -434,8 +474,11 @@
   // =========================================================================
   // Hub (mission picker) + navigation
   // =========================================================================
+  const hubCards = []; // [{ card, mission, available, metaEl }]
+
   function buildHub() {
     el.missionGrid.innerHTML = "";
+    hubCards.length = 0;
     for (const mission of MISSIONS) {
       const available = mission.maps.length > 0;
       const card = document.createElement("button");
@@ -453,14 +496,42 @@
 
       const meta = document.createElement("div");
       meta.className = "m-meta";
-      meta.textContent = available
-        ? mission.maps.length + (mission.maps.length === 1 ? " map" : " maps")
-        : "Coming soon";
 
       card.append(num, name, meta);
       if (available) card.addEventListener("click", () => openMission(mission));
       el.missionGrid.appendChild(card);
+      hubCards.push({ card, mission, available, metaEl: meta });
     }
+    refreshHubCounts();
+  }
+
+  // Per-mission marked totals (summed from storage), shown in each card's meta line.
+  function refreshHubCounts() {
+    for (const hc of hubCards) {
+      if (!hc.available) { hc.metaEl.textContent = "Coming soon"; continue; }
+      const n = hc.mission.maps.length;
+      let marked = 0;
+      for (const map of hc.mission.maps) marked += loadMarkers(map.id).length;
+      hc.metaEl.textContent = n + (n === 1 ? " map" : " maps") +
+        (marked ? " · " + marked + " marked" : "");
+    }
+  }
+
+  function filterHub() {
+    const q = el.missionSearch.value.trim().toLowerCase();
+    const hideSoon = el.hideComingSoon.checked;
+    let shown = 0;
+    for (const hc of hubCards) {
+      const matchesSearch = !q ||
+        hc.mission.name.toLowerCase().includes(q) ||
+        String(hc.mission.number) === q ||
+        ("mission " + hc.mission.number).includes(q);
+      const passesToggle = !hideSoon || hc.available;
+      const visible = matchesSearch && passesToggle;
+      hc.card.hidden = !visible;
+      if (visible) shown++;
+    }
+    el.hubEmpty.hidden = shown > 0;
   }
 
   function showHub() {
@@ -469,6 +540,7 @@
     el.stage.hidden = true;
     el.toolbar.hidden = true;
     el.hub.hidden = false;
+    refreshHubCounts();  // reflect edits made inside the mission we just left
   }
 
   function openMission(mission) {
@@ -502,7 +574,11 @@
 
       const label = document.createElement("div");
       label.className = "floor-label";
-      label.textContent = map.name;
+      const labelName = document.createElement("span");
+      labelName.textContent = map.name;
+      const countEl = document.createElement("span");
+      countEl.className = "floor-count";
+      label.append(labelName, countEl);
 
       const wrap = document.createElement("div");
       wrap.className = "floor-wrap";
@@ -520,7 +596,7 @@
       section.append(label, wrap);
       el.scroller.appendChild(section);
 
-      const floor = { map, markers: loadMarkers(map.id), undoStack: [], section, wrap, img, svg };
+      const floor = { map, markers: loadMarkers(map.id), undoStack: [], section, wrap, img, svg, countEl };
       state.floors.push(floor);
 
       const applyDims = (w, h) => {
@@ -593,10 +669,86 @@
       }
     });
 
+    // Hub search + "hide coming soon" toggle
+    el.missionSearch.addEventListener("input", filterHub);
+    try {
+      el.hideComingSoon.checked = localStorage.getItem(STORAGE_PREFIX + "hideSoon") === "1";
+    } catch (e) {}
+    el.hideComingSoon.addEventListener("change", () => {
+      try { localStorage.setItem(STORAGE_PREFIX + "hideSoon", el.hideComingSoon.checked ? "1" : "0"); } catch (e) {}
+      filterHub();
+    });
+    filterHub();
+
+    setupPwaPolish();
+
     // Start on the hub so the user picks a mission first.
     showHub();
 
     registerServiceWorker();
+  }
+
+  // =========================================================================
+  // PWA polish: install button, offline badge, "updated" toast
+  // =========================================================================
+  let deferredInstall = null;
+
+  function setupPwaPolish() {
+    // Install button (Chromium/Android). iOS Safari fires no event → show a hint instead.
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredInstall = e;
+      if (!isStandalone()) el.installBtn.hidden = false;
+    });
+    el.installBtn.addEventListener("click", async () => {
+      if (!deferredInstall) return;
+      deferredInstall.prompt();
+      try { await deferredInstall.userChoice; } catch (e) {}
+      deferredInstall = null;
+      el.installBtn.hidden = true;
+    });
+    window.addEventListener("appinstalled", () => {
+      el.installBtn.hidden = true;
+      deferredInstall = null;
+    });
+    if (isIOS() && !isStandalone()) el.iosHint.hidden = false;
+
+    // Offline indicator
+    const updateOnline = () => { el.offlineBadge.hidden = navigator.onLine; };
+    window.addEventListener("online", updateOnline);
+    window.addEventListener("offline", updateOnline);
+    updateOnline();
+
+    // "Updated to vX" toast after a force-update
+    try {
+      const key = STORAGE_PREFIX + "lastVersion";
+      const prev = localStorage.getItem(key);
+      if (prev && prev !== APP_VERSION) toast("Updated to v" + APP_VERSION);
+      localStorage.setItem(key, APP_VERSION);
+    } catch (e) {}
+  }
+
+  function isStandalone() {
+    return window.matchMedia && window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
+  }
+  function isIOS() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+
+  let toastTimer = null;
+  function toast(msg) {
+    el.toast.textContent = msg;
+    el.toast.hidden = false;
+    // reflow so the fade-in transition runs each time
+    void el.toast.offsetWidth;
+    el.toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      el.toast.classList.remove("show");
+      setTimeout(() => { el.toast.hidden = true; }, 300);
+    }, 2600);
   }
 
   // Register the SW and force it to check for a newer version on every open,

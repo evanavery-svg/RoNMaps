@@ -37,9 +37,36 @@ body {
   padding: max(20px, env(safe-area-inset-top)) 16px 32px;
   background: radial-gradient(circle at 50% 0%, #1c2634 0, var(--bg) 60%);
 }
-.hub-head { text-align: center; margin: 10px 0 22px; }
+.hub-head { text-align: center; margin: 10px auto 22px; max-width: 920px; }
+.hub-top { display: flex; align-items: center; justify-content: center; gap: 12px; position: relative; }
 .hub-title { margin: 0; font-size: clamp(22px, 5vw, 34px); letter-spacing: .01em; }
 .hub-sub { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+
+.install-btn {
+  position: absolute; right: 0;
+  min-height: 38px; padding: 0 14px;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 8px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.ios-install-hint { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+
+.hub-controls {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  justify-content: center; margin-top: 16px;
+}
+.mission-search {
+  flex: 1 1 320px; max-width: 420px;
+  min-height: var(--tap); padding: 8px 14px;
+  background: var(--toolbar-2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 999px;
+  font-size: 15px;
+}
+.mission-search::placeholder { color: var(--muted); }
+.toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; cursor: pointer; white-space: nowrap; }
+.toggle input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+
+.hub-empty { text-align: center; color: var(--muted); margin: 24px 0; }
 
 .mission-grid {
   display: grid;
@@ -193,6 +220,7 @@ body {
   backdrop-filter: blur(6px);
   border-bottom: 1px solid var(--line);
 }
+.floor-count { color: var(--accent); font-weight: 700; }
 .floor-section.active .floor-label { color: var(--text); }
 .floor-section.active .floor-label::after {
   content: "  ● in view";
@@ -230,6 +258,7 @@ body {
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
+.mark.selected { touch-action: none; cursor: move; }  /* the selected X drags to reposition */
 .mark .sel-handle {
   fill: #fff;
   stroke: var(--accent);
@@ -252,10 +281,37 @@ body {
   text-align: center;
 }
 
+/* ---------------- PWA polish: offline badge + toast ---------------- */
+.offline-badge {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top)); left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  background: #7a2b2b; color: #fff;
+  font-size: 12px; font-weight: 600; letter-spacing: .03em;
+  padding: 5px 12px; border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.4);
+}
+.toast {
+  position: fixed;
+  bottom: calc(20px + env(safe-area-inset-bottom)); left: 50%;
+  transform: translate(-50%, 12px);
+  z-index: 60;
+  background: #1f6f3a; color: #fff;
+  font-size: 14px; font-weight: 600;
+  padding: 10px 18px; border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.45);
+  opacity: 0;
+  transition: opacity .25s ease, transform .25s ease;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
 @media (max-width: 560px) {
   .tool-txt { display: none; }
   .tb-group + .tb-group { padding-left: 6px; }
   .tb-size input[type="range"] { width: 96px; }
   .hint { font-size: 12px; }
   .tb-title { max-width: 34vw; }
+  .install-btn { position: static; margin: 0; }
+  .hub-top { flex-direction: column; gap: 8px; }
 }
