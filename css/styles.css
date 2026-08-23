@@ -79,6 +79,14 @@ body {
   font-size: 22px; line-height: 1;
 }
 
+.app-foot {
+  margin: 28px auto 6px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: .03em;
+}
+
 /* ---------------- Toolbar ---------------- */
 .toolbar {
   display: flex;

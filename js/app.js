@@ -4,6 +4,7 @@
 (function () {
   "use strict";
 
+  const APP_VERSION = "0.1";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";
   const UNDO_LIMIT = 60;
@@ -15,6 +16,7 @@
   const el = {
     hub: document.getElementById("hub"),
     missionGrid: document.getElementById("missionGrid"),
+    appFoot: document.getElementById("appFoot"),
     toolbar: document.getElementById("toolbar"),
     backBtn: document.getElementById("backBtn"),
     stage: document.getElementById("stage"),
@@ -597,6 +599,7 @@
     buildSwatches();
     setColor(state.color);
     buildHub();
+    el.appFoot.textContent = "© Avery LLC · v" + APP_VERSION;
 
     el.backBtn.addEventListener("click", showHub);
     el.mapSelect.addEventListener("change", () => loadMap(el.mapSelect.value));
@@ -639,11 +642,45 @@
     // Start on the hub so the user picks a mission first.
     showHub();
 
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("service-worker.js").catch(() => {});
-      });
-    }
+    registerServiceWorker();
+  }
+
+  // Register the SW and force it to check for a newer version on every open,
+  // reloading once when a new version takes control so the app is always current.
+  function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+    window.addEventListener("load", async () => {
+      try {
+        const reg = await navigator.serviceWorker.register("service-worker.js", { updateViaCache: "none" });
+
+        // Only reload for updates that arrive AFTER this page already had a controller,
+        // so the very first visit doesn't reload itself.
+        const hadController = !!navigator.serviceWorker.controller;
+        let reloaded = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (reloaded || !hadController) return;
+          reloaded = true;
+          window.location.reload();
+        });
+
+        // If a new worker installs while we're open, ask it to activate immediately.
+        reg.addEventListener("updatefound", () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener("statechange", () => {
+            if (nw.state === "installed" && navigator.serviceWorker.controller) {
+              nw.postMessage({ type: "SKIP_WAITING" });
+            }
+          });
+        });
+
+        // Check for a new version right now, and again whenever the app regains focus.
+        reg.update();
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") reg.update();
+        });
+      } catch (e) { /* SW unsupported/blocked — app still works online */ }
+    });
   }
 
   init();

@@ -39,9 +39,36 @@ const MISSION_DATA = {
     ],
   },
 
-  // Add the other missions here as you upload them, e.g.:
+  // Mission 9 — Greased Palms.
+  9: {
+    name: "Greased Palms",
+    maps: [
+      { id: "greased-palms-ground",  name: "Ground",  src: "assets/maps/GreasedPalmsGround.png", width: 1080, height: 1920 },
+      { id: "greased-palms-floor-1", name: "Floor 1", src: "assets/maps/GreasedPalmsFloor1.png", width: 1080, height: 1920 },
+    ],
+  },
+
+  // Mission 12 — Rust Belt.
+  12: {
+    name: "Rust Belt",
+    maps: [
+      { id: "rust-belt-underground", name: "Underground", src: "assets/maps/RustBeltUnderGround.png", width: 1080, height: 1920 },
+      { id: "rust-belt-ground",      name: "Ground",      src: "assets/maps/RustBeltGround.png",      width: 1080, height: 1920 },
+    ],
+  },
+
+  // Mission 13 — Sins of the Father.
+  13: {
+    name: "Sins of the Father",
+    maps: [
+      { id: "sins-of-the-father-floor-1", name: "Floor 1", src: "assets/maps/SinsOfTheFatherFloor1.png", width: 1080, height: 1920 },
+      { id: "sins-of-the-father-floor-2", name: "Floor 2", src: "assets/maps/SinsOfTheFatherFloor2.png", width: 1080, height: 1920 },
+      { id: "sins-of-the-father-roof",    name: "Roof",    src: "assets/maps/SinsOfTheFatherRoof.png",    width: 1080, height: 1920 },
+    ],
+  },
+
+  // Add more missions here as you upload them, e.g.:
   // 1:  { name: "…", maps: [ … ] },
-  // 8:  { name: "…", maps: [ … ] },
 };
 
 // Build the full list of 26 mission slots. Slots without data show as "Coming soon".
