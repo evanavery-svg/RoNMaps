@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.9";
+  const APP_VERSION = "0.10";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -152,16 +152,37 @@
     buzz([10, 30, 10]);
   }
   function buzz(pattern) { try { navigator.vibrate && navigator.vibrate(pattern); } catch (e) {} }
+  // Reset clears every floor in the mission (not just the one in view).
   function reset() {
-    const f = activeFloor();
-    if (!f || !f.markers.length) return;
-    pushUndo(f);   // clearing is undoable
-    f.markers = [];
-    if (state.selectedIndex === indexOf(f)) clearSelection();
-    saveFloor(f);
-    renderFloor(f);
+    const toClear = state.floors.filter((f) => f.markers.length);
+    if (!toClear.length) return;
+
+    const snapshots = toClear.map((f) => ({ floor: f, markers: f.markers }));
+    for (const f of toClear) {
+      pushUndo(f);   // keeps per-floor Undo/Redo consistent too
+      f.markers = [];
+      saveFloor(f);
+      renderFloor(f);
+    }
+    if (state.selectedIndex >= 0 && toClear.includes(state.floors[state.selectedIndex])) {
+      clearSelection();
+    }
     updateSizeGroup();
-    toast("Cleared " + f.map.name, { action: "Undo", onAction: undo });
+    updateButtons();
+
+    const label = toClear.length === state.floors.length ? "Cleared all floors"
+      : "Cleared " + toClear.length + (toClear.length === 1 ? " floor" : " floors");
+    toast(label, { action: "Undo", onAction: () => undoResetAll(snapshots) });
+  }
+  function undoResetAll(snapshots) {
+    for (const { floor, markers } of snapshots) {
+      if (floor.undoStack.length) floor.undoStack.pop(); // remove the snapshot reset() pushed
+      floor.markers = markers;
+      saveFloor(floor);
+      renderFloor(floor);
+    }
+    updateButtons();
+    updateSizeGroup();
   }
 
   // ---- selection ---- (only ever set by a deliberate tap on an existing mark)
@@ -588,7 +609,7 @@
     const f = activeFloor();
     el.undoBtn.disabled = !f || f.undoStack.length === 0;
     el.redoBtn.disabled = !f || f.redoStack.length === 0;
-    el.resetBtn.disabled = !f || f.markers.length === 0;
+    el.resetBtn.disabled = !state.floors.some((fl) => fl.markers.length);
   }
 
   function updateSizeGroup() {

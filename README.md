@@ -16,7 +16,8 @@ and mouse (Windows).
 - **Select & resize** any X — tap it, then use the size slider or drag the corner handle.
 - **Color** picker + quick preset swatches. Changing color also recolors the selected X.
 - **Eraser** — tap an X to remove it.
-- **Undo** and **Reset** — act on the floor you're currently viewing.
+- **Undo/Redo** act on the floor you're currently viewing. **Reset** clears every floor
+  in the mission at once (with an "Undo" toast to bring it all back).
 - **Zoom** — pinch (phone) or ctrl+scroll (Windows) to zoom in for precise placement.
 - **Saved per map** in your browser (localStorage) — marks survive refresh/close.
 - **Installable & offline** — "Add to Home Screen"; app shell + maps are cached, and the app
