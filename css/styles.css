@@ -125,8 +125,19 @@ body {
   background: var(--toolbar);
   border-bottom: 1px solid var(--line);
   z-index: 10;
+  transition: margin-top .22s ease;   /* auto-hide slides it up out of the flow */
 }
 .tb-group { display: flex; align-items: center; gap: 6px; }
+
+/* Floor quick-jump pills */
+.tb-floornav { flex-wrap: wrap; }
+.floor-pill {
+  min-height: 34px; padding: 0 12px;
+  background: var(--toolbar-2); color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px;
+  font-size: 13px; cursor: pointer;
+}
+.floor-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .tb-group + .tb-group { padding-left: 8px; border-left: 1px solid var(--line); }
 .tb-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 
@@ -231,8 +242,10 @@ body {
 .floor-wrap {
   position: relative;
   width: 100%;
-  background: #fff;      /* letterbox behind a map that isn't loaded yet */
+  margin: 0 auto;        /* center when fitted narrower than the viewport */
+  background: #fff;       /* letterbox behind a map that isn't loaded yet */
 }
+.floor-scroll.zoomed { overflow-x: auto; }   /* pan horizontally when a floor is zoomed in */
 .map-img {
   display: block;
   width: 100%;
@@ -305,6 +318,12 @@ body {
   transition: opacity .25s ease, transform .25s ease;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast { display: inline-flex; align-items: center; gap: 12px; }
+.toast-action {
+  background: rgba(255,255,255,.18); color: #fff;
+  border: 1px solid rgba(255,255,255,.5); border-radius: 999px;
+  padding: 4px 12px; font-size: 13px; font-weight: 700; cursor: pointer;
+}
 
 @media (max-width: 560px) {
   .tool-txt { display: none; }

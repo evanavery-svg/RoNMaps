@@ -68,18 +68,21 @@
 
     <div class="tb-group">
       <button id="undoBtn" class="tool" title="Undo">↶<span class="tool-txt">Undo</span></button>
-      <button id="resetBtn" class="tool tool-danger" title="Clear all marks on this map">⟲<span class="tool-txt">Reset</span></button>
+      <button id="redoBtn" class="tool" title="Redo">↷<span class="tool-txt">Redo</span></button>
+      <button id="resetBtn" class="tool tool-danger" title="Clear all marks on this floor">⟲<span class="tool-txt">Reset</span></button>
     </div>
 
     <div class="tb-group tb-size" id="sizeGroup" hidden>
       <label class="tb-label" for="sizeRange">Size</label>
       <input type="range" id="sizeRange" min="16" max="220" value="64" />
     </div>
+
+    <div class="tb-group tb-floornav" id="floorNav" role="group" aria-label="Jump to floor"></div>
   </header>
 
   <main class="stage" id="stage" hidden>
     <div class="floor-scroll" id="floorScroll"></div>
-    <div class="hint" id="hint">Tap a room to stamp an X · scroll for other floors · pinch to zoom.</div>
+    <div class="hint" id="hint">Tap to stamp · scroll for floors · double-tap to zoom.</div>
   </main>
 
   <script src="js/maps.js"></script>

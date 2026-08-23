@@ -6,12 +6,15 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.3";
+  const APP_VERSION = "0.4";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
   const TAP_MOVE_TOLERANCE = 10;  // px of screen movement still counted as a tap
   const TAP_TIME_LIMIT = 500;     // ms
+  const DOUBLE_TAP_MS = 320;      // two taps within this window = double-tap (zoom)
+  const DOUBLE_TAP_PX = 34;       // …and within this distance
+  const LONG_PRESS_MS = 550;      // hold an X this long to delete it
   const PRESETS = ["#e02424", "#f5a524", "#16a34a", "#2563eb", "#111111", "#ffffff"];
 
   // ---- DOM ----
@@ -36,7 +39,9 @@
     swatches: document.getElementById("swatches"),
     colorInput: document.getElementById("colorInput"),
     undoBtn: document.getElementById("undoBtn"),
+    redoBtn: document.getElementById("redoBtn"),
     resetBtn: document.getElementById("resetBtn"),
+    floorNav: document.getElementById("floorNav"),
     sizeGroup: document.getElementById("sizeGroup"),
     sizeRange: document.getElementById("sizeRange"),
     hint: document.getElementById("hint"),
@@ -92,12 +97,22 @@
   function pushUndo(floor) {
     floor.undoStack.push(JSON.stringify(floor.markers));
     if (floor.undoStack.length > UNDO_LIMIT) floor.undoStack.shift();
+    floor.redoStack.length = 0; // a fresh action invalidates the redo history
     updateButtons();
   }
   function undo() {
     const f = activeFloor();
     if (!f || !f.undoStack.length) return;
-    const snap = f.undoStack.pop();
+    f.redoStack.push(JSON.stringify(f.markers));
+    applySnapshot(f, f.undoStack.pop());
+  }
+  function redo() {
+    const f = activeFloor();
+    if (!f || !f.redoStack.length) return;
+    f.undoStack.push(JSON.stringify(f.markers));
+    applySnapshot(f, f.redoStack.pop());
+  }
+  function applySnapshot(f, snap) {
     let markers; try { markers = JSON.parse(snap); } catch (e) { markers = []; }
     f.markers = markers;
     if (state.selectedIndex === indexOf(f) && !f.markers.some((m) => m.id === state.selectedId)) {
@@ -137,13 +152,13 @@
   function reset() {
     const f = activeFloor();
     if (!f || !f.markers.length) return;
-    if (!confirm("Clear all marks on " + f.map.name + "?")) return;
-    pushUndo(f);
+    pushUndo(f);   // clearing is undoable
     f.markers = [];
     if (state.selectedIndex === indexOf(f)) clearSelection();
     saveFloor(f);
     renderFloor(f);
     updateSizeGroup();
+    toast("Cleared " + f.map.name, { action: "Undo", onAction: undo });
   }
 
   // ---- selection ----
@@ -249,6 +264,33 @@
   // scroll fires pointercancel, which cancels the pending tap.
   // =========================================================================
   let press = null;
+  let lastTap = null;          // for double-tap detection
+  let longPressTimer = null;
+
+  function armLongPress(floor, id) {
+    clearLongPress();
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      if (!press) return;
+      press.longPressed = true;   // pointerup will see this and skip the tap/drag
+      deleteMarker(floor, id);    // long-press an X to delete it (buzzes)
+      lastTap = null;
+    }, LONG_PRESS_MS);
+  }
+  function clearLongPress() { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }
+
+  // Remove a marker without adding undo noise — used to undo the phantom X that a
+  // double-tap's first tap placed (addMarker pushed one undo snapshot we pop here).
+  function removeMarkerSilently(floor, id) {
+    const i = floor.markers.findIndex((m) => m.id === id);
+    if (i < 0) return;
+    floor.markers.splice(i, 1);
+    floor.undoStack.pop();
+    if (state.selectedId === id) clearSelection();
+    saveFloor(floor);
+    renderFloor(floor);
+    updateSizeGroup();
+  }
 
   function onPointerDown(e) {
     const floor = floorFromEvent(e);
@@ -274,11 +316,13 @@
         startImg: toImage(floor, e.clientX, e.clientY), startX: m.x, startY: m.y,
         downX: e.clientX, downY: e.clientY, downTime: performance.now(), moved: false, changed: false,
       };
+      armLongPress(floor, mark.dataset.id);
     } else if (mark) {
       press = {
         kind: "mark", floor, id: mark.dataset.id,
         downX: e.clientX, downY: e.clientY, downTime: performance.now(), moved: false,
       };
+      armLongPress(floor, mark.dataset.id);
     } else {
       press = {
         kind: "empty", floor, startImg: toImage(floor, e.clientX, e.clientY),
@@ -316,37 +360,63 @@
     }
     if (Math.hypot(e.clientX - press.downX, e.clientY - press.downY) > TAP_MOVE_TOLERANCE) {
       press.moved = true;
+      clearLongPress();
     }
   }
 
   function onPointerUp(e) {
     if (!press) return;
+    clearLongPress();
     if (press.kind === "resize" || press.kind === "move") {
       el.scroller.releasePointerCapture && el.scroller.releasePointerCapture(e.pointerId);
     }
     const p = press;
     press = null;
 
+    if (p.longPressed) return;                 // already handled by the long-press delete
     if (p.kind === "resize") { commitResize(p); return; }
-    if (p.kind === "move") { commitDrag(p); return; }
+    if (p.kind === "move" && p.moved) { commitDrag(p); return; }
 
     const dt = performance.now() - p.downTime;
     const isTap = !p.moved && dt < TAP_TIME_LIMIT;
-    if (!isTap) return;
+    if (!isTap) { if (p.kind === "move") commitDrag(p); return; }
 
     setActiveFloor(indexOf(p.floor));
+
+    // Double-tap → zoom that floor (undo any X the first tap just placed).
+    const now = performance.now();
+    const isDouble = lastTap && (now - lastTap.time < DOUBLE_TAP_MS) &&
+      Math.hypot(p.downX - lastTap.x, p.downY - lastTap.y) < DOUBLE_TAP_PX &&
+      lastTap.floorIdx === indexOf(p.floor);
+    if (isDouble) {
+      if (lastTap.stampedId) removeMarkerSilently(p.floor, lastTap.stampedId);
+      lastTap = null;
+      const c = toImage(p.floor, p.downX, p.downY);
+      toggleZoom(p.floor, c.x, c.y);
+      return;
+    }
+
+    let stampedId = null;
     if (p.kind === "mark") {
       if (state.tool === "eraser") deleteMarker(p.floor, p.id);
       else selectMarker(p.floor, p.id);
+    } else if (p.kind === "move") {
+      // tap on the already-selected X — keep it selected (no-op)
     } else { // empty
-      if (state.tool === "stamp" && inBounds(p.floor, p.startImg)) addMarker(p.floor, p.startImg.x, p.startImg.y);
-      else deselect();
+      if (state.tool === "stamp" && inBounds(p.floor, p.startImg)) {
+        addMarker(p.floor, p.startImg.x, p.startImg.y);
+        stampedId = state.selectedId;
+      } else {
+        deselect();
+      }
     }
+    lastTap = { time: now, x: p.downX, y: p.downY, floorIdx: indexOf(p.floor), stampedId };
   }
 
   function onPointerCancel() {
+    clearLongPress();
     if (press && press.kind === "resize") commitResize(press);
-    else if (press && press.kind === "move") commitDrag(press);
+    else if (press && press.kind === "move" && press.moved) commitDrag(press);
     press = null;
   }
 
@@ -387,6 +457,8 @@
     if (i < 0 || i >= state.floors.length) return;
     state.activeIndex = i;
     state.floors.forEach((f, idx) => f.section.classList.toggle("active", idx === i));
+    const pills = el.floorNav.children;
+    for (let k = 0; k < pills.length; k++) pills[k].classList.toggle("active", k === i);
     updateButtons();
   }
 
@@ -420,8 +492,25 @@
     for (const b of el.swatches.children) {
       b.classList.toggle("active", b.style.getPropertyValue("--sw").trim().toLowerCase() === c.toLowerCase());
     }
+    savePrefs();
   }
   function normalizeHex(c) { return /^#[0-9a-fA-F]{6}$/.test(c) ? c : null; }
+
+  // Remember the chosen color + default stamp size across sessions.
+  function savePrefs() {
+    try {
+      localStorage.setItem(STORAGE_PREFIX + "color", state.color);
+      localStorage.setItem(STORAGE_PREFIX + "size", String(state.stampSize));
+    } catch (e) {}
+  }
+  function loadPrefs() {
+    try {
+      const c = localStorage.getItem(STORAGE_PREFIX + "color");
+      if (normalizeHex(c)) state.color = c;
+      const s = Number(localStorage.getItem(STORAGE_PREFIX + "size"));
+      if (s >= 16 && s <= 220) state.stampSize = s;
+    } catch (e) {}
+  }
 
   function setTool(tool) {
     state.tool = tool;
@@ -432,12 +521,13 @@
     if (tool === "eraser") deselect();
     el.hint.textContent = tool === "eraser"
       ? "Eraser: tap an X to remove it."
-      : "Tap a room to stamp an X · scroll for other floors · pinch to zoom.";
+      : "Tap to stamp · scroll for floors · double-tap to zoom.";
   }
 
   function updateButtons() {
     const f = activeFloor();
     el.undoBtn.disabled = !f || f.undoStack.length === 0;
+    el.redoBtn.disabled = !f || f.redoStack.length === 0;
     el.resetBtn.disabled = !f || f.markers.length === 0;
   }
 
@@ -460,12 +550,13 @@
       renderFloor(f);
     } else {
       state.stampSize = val;
+      savePrefs();
     }
   }
   function onSizeCommit() {
     if (onSizeInput._dragging) {
       const m = selectedMarker();
-      if (m) { state.stampSize = m.size; saveFloor(selectedFloor()); }
+      if (m) { state.stampSize = m.size; saveFloor(selectedFloor()); savePrefs(); }
       onSizeInput._dragging = false;
       updateButtons();
     }
@@ -550,12 +641,104 @@
     el.hub.hidden = true;
     el.toolbar.hidden = false;
     el.stage.hidden = false;      // must be visible before we measure/observe
+    showToolbar();
     buildFloors(mission);
+    buildFloorNav(mission);
+    layoutFloors();
     clearSelection();
     updateSizeGroup();
     setTool(state.tool);
     el.scroller.scrollTop = 0;
     setActiveFloor(0);
+  }
+
+  // Fit each floor to roughly the viewport height so a whole floor is visible
+  // (great on an iPad in landscape, where portrait maps would otherwise be huge).
+  function layoutFloors() {
+    const availH = el.scroller.clientHeight || window.innerHeight;
+    const availW = el.scroller.clientWidth || window.innerWidth;
+    for (const f of state.floors) {
+      if (f.zoomed) continue;
+      const w = f.map.width, h = f.map.height;
+      if (!w || !h) { f.wrap.style.width = ""; continue; }
+      const fitW = Math.min(availW, (w / h) * availH * 0.92);
+      f.fitWidth = fitW;
+      f.wrap.style.width = Math.round(fitW) + "px";
+    }
+  }
+
+  // Floor quick-jump pills in the toolbar (only when a mission has >1 floor).
+  function buildFloorNav(mission) {
+    el.floorNav.innerHTML = "";
+    if (mission.maps.length < 2) { el.floorNav.hidden = true; return; }
+    el.floorNav.hidden = false;
+    mission.maps.forEach((map, idx) => {
+      const b = document.createElement("button");
+      b.className = "floor-pill";
+      b.type = "button";
+      b.textContent = map.name;
+      b.addEventListener("click", () => jumpToFloor(idx));
+      el.floorNav.appendChild(b);
+    });
+  }
+  function jumpToFloor(idx) {
+    const f = state.floors[idx];
+    if (!f) return;
+    suppressHideUntil = performance.now() + 800;  // don't let the jump-scroll hide the toolbar
+    showToolbar();
+    f.section.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveFloor(idx);
+  }
+
+  // Double-tap toggles a floor between fit-to-view and zoomed-in (wider than the
+  // viewport, so you can pan horizontally). imgX/imgY are image px to center on.
+  function toggleZoom(floor, imgX, imgY) {
+    floor.zoomed = !floor.zoomed;
+    if (floor.zoomed) {
+      const availW = el.scroller.clientWidth || window.innerWidth;
+      const zoomW = Math.max((floor.fitWidth || availW) * 2.2, availW * 1.6);
+      floor.wrap.style.width = Math.round(zoomW) + "px";
+      el.scroller.classList.add("zoomed");
+      // center the tapped point after the wider layout settles
+      requestAnimationFrame(() => centerOn(floor, imgX, imgY));
+    } else {
+      floor.wrap.style.width = Math.round(floor.fitWidth) + "px";
+      if (!state.floors.some((f) => f.zoomed)) el.scroller.classList.remove("zoomed");
+    }
+  }
+  function centerOn(floor, imgX, imgY) {
+    const rect = floor.img.getBoundingClientRect();
+    const sc = el.scroller.getBoundingClientRect();
+    const targetX = rect.left + (imgX / floor.map.width) * rect.width;
+    const targetY = rect.top + (imgY / floor.map.height) * rect.height;
+    el.scroller.scrollLeft += (targetX - sc.left) - sc.width / 2;
+    el.scroller.scrollTop += (targetY - sc.top) - sc.height / 2;
+  }
+
+  // Auto-hide the toolbar while scrolling down a map, reveal it scrolling up —
+  // gives more blueprint on screen (helps most on a landscape iPad).
+  let tbHidden = false, lastScrollTop = 0, suppressHideUntil = 0;
+  function showToolbar() {
+    tbHidden = false;
+    el.toolbar.style.marginTop = "0px";
+  }
+  function hideToolbar() {
+    if (tbHidden) return;
+    tbHidden = true;
+    el.toolbar.style.marginTop = -el.toolbar.offsetHeight + "px";
+  }
+  function onScroll() {
+    const st = el.scroller.scrollTop;
+    // Keep the toolbar out while jump-scrolling or while a marker is selected
+    // (so the size slider stays reachable).
+    if (performance.now() < suppressHideUntil || state.selectedId != null) {
+      showToolbar(); lastScrollTop = st; return;
+    }
+    if (st < 40) { showToolbar(); lastScrollTop = st; return; }
+    const dy = st - lastScrollTop;
+    if (dy > 8) hideToolbar();
+    else if (dy < -8) showToolbar();
+    lastScrollTop = st;
   }
 
   // =========================================================================
@@ -596,7 +779,7 @@
       section.append(label, wrap);
       el.scroller.appendChild(section);
 
-      const floor = { map, markers: loadMarkers(map.id), undoStack: [], section, wrap, img, svg, countEl };
+      const floor = { map, markers: loadMarkers(map.id), undoStack: [], redoStack: [], section, wrap, img, svg, countEl, zoomed: false, fitWidth: 0 };
       state.floors.push(floor);
 
       const applyDims = (w, h) => {
@@ -628,7 +811,14 @@
     state.selectedId = null;
     state.selectedIndex = -1;
     press = null;
+    lastTap = null;
+    clearLongPress();
     el.scroller.innerHTML = "";
+    el.scroller.classList.remove("zoomed");
+    el.floorNav.innerHTML = "";
+    el.floorNav.hidden = true;
+    showToolbar();
+    lastScrollTop = 0;
   }
 
   // =========================================================================
@@ -636,7 +826,9 @@
   // =========================================================================
   function init() {
     buildSwatches();
+    loadPrefs();
     setColor(state.color);
+    el.sizeRange.value = Math.round(clamp(state.stampSize, 16, 220));
     buildHub();
     el.appFoot.textContent = "© Avery LLC · v" + APP_VERSION;
 
@@ -644,6 +836,7 @@
     el.stampBtn.addEventListener("click", () => setTool("stamp"));
     el.eraserBtn.addEventListener("click", () => setTool("eraser"));
     el.undoBtn.addEventListener("click", undo);
+    el.redoBtn.addEventListener("click", redo);
     el.resetBtn.addEventListener("click", reset);
     el.colorInput.addEventListener("input", () => setColor(el.colorInput.value));
     el.sizeRange.addEventListener("input", onSizeInput);
@@ -656,10 +849,19 @@
     el.scroller.addEventListener("pointerup", onPointerUp);
     el.scroller.addEventListener("pointercancel", onPointerCancel);
     el.scroller.addEventListener("contextmenu", (e) => e.preventDefault());
+    el.scroller.addEventListener("scroll", onScroll, { passive: true });
+
+    // Re-fit floors when the screen changes (e.g. rotating the iPad).
+    const relayout = () => { if (state.mission) layoutFloors(); };
+    window.addEventListener("resize", relayout);
+    window.addEventListener("orientationchange", () => setTimeout(relayout, 250));
 
     document.addEventListener("keydown", (e) => {
       if (!el.hub.hidden) return; // no shortcuts on the hub
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
+      const z = e.key.toLowerCase() === "z";
+      if ((e.ctrlKey || e.metaKey) && z && e.shiftKey) { e.preventDefault(); redo(); }
+      else if ((e.ctrlKey || e.metaKey) && z) { e.preventDefault(); undo(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
       else if (e.key === "Escape") showHub();
       else if (e.key === "e") setTool("eraser");
       else if (e.key === "s") setTool("stamp");
@@ -738,17 +940,27 @@
   }
 
   let toastTimer = null;
-  function toast(msg) {
-    el.toast.textContent = msg;
+  function hideToast() {
+    el.toast.classList.remove("show");
+    setTimeout(() => { el.toast.hidden = true; }, 300);
+  }
+  function toast(msg, opts) {
+    el.toast.innerHTML = "";
+    const span = document.createElement("span");
+    span.textContent = msg;
+    el.toast.appendChild(span);
+    if (opts && opts.action) {
+      const btn = document.createElement("button");
+      btn.className = "toast-action";
+      btn.textContent = opts.action;
+      btn.addEventListener("click", () => { hideToast(); if (opts.onAction) opts.onAction(); });
+      el.toast.appendChild(btn);
+    }
     el.toast.hidden = false;
-    // reflow so the fade-in transition runs each time
-    void el.toast.offsetWidth;
+    void el.toast.offsetWidth; // reflow so the fade-in runs each time
     el.toast.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      el.toast.classList.remove("show");
-      setTimeout(() => { el.toast.hidden = true; }, 300);
-    }, 2600);
+    toastTimer = setTimeout(hideToast, opts && opts.action ? 4200 : 2600);
   }
 
   // Register the SW and force it to check for a newer version on every open,
