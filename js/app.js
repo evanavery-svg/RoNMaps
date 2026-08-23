@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.8";
+  const APP_VERSION = "0.9";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -195,16 +195,19 @@
     updateButtons();
   }
 
+  const W_SCALE = 0.82;  // render W a bit smaller so the X reads a little bigger
+
   function buildMarker(m, selected) {
     const g = document.createElementNS(SVGNS, "g");
     g.setAttribute("class", "mark" + (selected ? " selected" : ""));
     g.dataset.id = m.id;
 
-    const h = m.size / 2;
-    const sw = Math.max(4, m.size * 0.16); // stroke scales with size
+    const rs = m.size * (m.type === "w" ? W_SCALE : 1); // rendered size for this shape
+    const h = rs / 2;
+    const sw = Math.max(4, rs * 0.16); // stroke scales with size
 
     if (m.type === "w") {
-      g.appendChild(letterW(m, sw));
+      g.appendChild(letterW(m, rs, sw));
     } else {
       // subtle dark backing so a light-colored X reads on a light blueprint
       g.appendChild(lineGroup(m, h, sw + 6, "rgba(0,0,0,0.35)"));
@@ -215,7 +218,7 @@
       const box = document.createElementNS(SVGNS, "rect");
       box.setAttribute("class", "sel-box");
       box.setAttribute("x", m.x - h); box.setAttribute("y", m.y - h);
-      box.setAttribute("width", m.size); box.setAttribute("height", m.size);
+      box.setAttribute("width", rs); box.setAttribute("height", rs);
       g.appendChild(box);
 
       const handle = document.createElementNS(SVGNS, "circle");
@@ -245,7 +248,7 @@
   }
   // A bold "W" with a dark halo (stroke painted behind the fill), to match the X's
   // haloed, color-themed look and stay legible on the blueprints.
-  function letterW(m, sw) {
+  function letterW(m, rs, sw) {
     const t = document.createElementNS(SVGNS, "text");
     t.textContent = "W";
     t.setAttribute("x", m.x);
@@ -254,7 +257,7 @@
     t.setAttribute("dominant-baseline", "central");
     t.setAttribute("font-family", "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif");
     t.setAttribute("font-weight", "900");
-    t.setAttribute("font-size", m.size * 1.15);
+    t.setAttribute("font-size", rs * 1.15);
     t.setAttribute("fill", m.color);
     t.setAttribute("stroke", "rgba(0,0,0,0.4)");
     t.setAttribute("stroke-width", sw + 6);
