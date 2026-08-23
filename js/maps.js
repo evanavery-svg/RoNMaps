@@ -1,32 +1,57 @@
-// Map manifest for Ready or Not — Sinuous Trail mission.
+// Mission + map manifest for Ready or Not.
 //
-// Only the black-and-white blueprints are listed here. To add the real maps:
-//   1. Drop the image file into assets/maps/  (PNG/JPG/SVG all work)
-//   2. Add/replace an entry below with its id, floor name, filename, and pixel size
-//   3. Add the same path to CACHE_ASSETS in service-worker.js so it works offline
+// There are 26 missions total. Only the ones you've added maps for are playable in the hub;
+// the rest show as "Coming soon" until you fill them in.
 //
-// `width`/`height` should match the image's natural pixel dimensions. They define the
-// coordinate space that markers are stored in, so marks stay locked to the map on any
-// screen. (If you don't know them, the app falls back to the image's loaded size.)
+// ---------------------------------------------------------------------------
+// TO ADD A MISSION'S MAPS:
+//   1. Drop the image files into assets/maps/  (PNG or JPG)
+//   2. Add an entry to MISSION_DATA below, keyed by the mission's number (1-26):
 //
-// To add a whole new mission later, just keep adding entries — the `mission` field groups
-// them in the map picker.
+//        12: {
+//          name: "Mission Name",
+//          maps: [
+//            { id: "mission-12-ground", name: "Ground", src: "assets/maps/mission-12-ground.png" },
+//            { id: "mission-12-floor-1", name: "Floor 1", src: "assets/maps/mission-12-floor-1.png" },
+//          ],
+//        },
+//
+//   3. Add the same src paths to CACHE_ASSETS in service-worker.js and bump CACHE_VERSION
+//      so they work offline.
+//
+// Notes:
+//   - `id` must be unique (it's the per-map save key for your X marks).
+//   - `name` is the floor label shown in the picker; list floors in the order you want.
+//   - width/height are optional — if omitted, the app reads the image's natural pixel size.
+//     Marks are stored in that pixel space, so keep an image's size stable once you've marked on it.
+// ---------------------------------------------------------------------------
 
-const MAPS = [
-  {
-    id: "sinuous-trail-floor-1",
-    mission: "Sinuous Trail",
-    name: "Floor 1",
-    src: "assets/maps/placeholder-floor-1.svg",
-    width: 1600,
-    height: 1200,
+const TOTAL_MISSIONS = 26;
+
+const MISSION_DATA = {
+  // Mission 7 — Sinuous Trail (the only one uploaded so far).
+  7: {
+    name: "Sinuous Trail",
+    maps: [
+      { id: "sinuous-trail-ground",  name: "Ground",  src: "assets/maps/sinuous-trail-ground.png" },
+      { id: "sinuous-trail-floor-1", name: "Floor 1", src: "assets/maps/sinuous-trail-floor-1.png" },
+      { id: "sinuous-trail-floor-2", name: "Floor 2", src: "assets/maps/sinuous-trail-floor-2.png" },
+    ],
   },
-  {
-    id: "sinuous-trail-floor-2",
-    mission: "Sinuous Trail",
-    name: "Floor 2",
-    src: "assets/maps/placeholder-floor-2.svg",
-    width: 1600,
-    height: 1200,
-  },
-];
+
+  // Add the other missions here as you upload them, e.g.:
+  // 1:  { name: "…", maps: [ … ] },
+  // 8:  { name: "…", maps: [ … ] },
+};
+
+// Build the full list of 26 mission slots. Slots without data show as "Coming soon".
+const MISSIONS = [];
+for (let n = 1; n <= TOTAL_MISSIONS; n++) {
+  const d = MISSION_DATA[n] || {};
+  MISSIONS.push({
+    number: n,
+    id: d.id || ("mission-" + n),
+    name: d.name || "",
+    maps: (d.maps || []).slice(),
+  });
+}

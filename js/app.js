@@ -13,6 +13,10 @@
 
   // ---- DOM ----
   const el = {
+    hub: document.getElementById("hub"),
+    missionGrid: document.getElementById("missionGrid"),
+    toolbar: document.getElementById("toolbar"),
+    backBtn: document.getElementById("backBtn"),
     stage: document.getElementById("stage"),
     viewport: document.getElementById("viewport"),
     canvas: document.getElementById("canvas"),
@@ -33,6 +37,7 @@
 
   // ---- State ----
   const state = {
+    mission: null,
     mapId: null,
     map: null,
     markers: [],
@@ -489,27 +494,77 @@
   }
 
   // =========================================================================
+  // Hub (mission picker) + navigation
+  // =========================================================================
+  function buildHub() {
+    el.missionGrid.innerHTML = "";
+    for (const mission of MISSIONS) {
+      const available = mission.maps.length > 0;
+      const card = document.createElement("button");
+      card.className = "mission-card " + (available ? "available" : "locked");
+      card.type = "button";
+      if (!available) card.disabled = true;
+
+      const num = document.createElement("div");
+      num.className = "m-num";
+      num.textContent = "Mission " + mission.number;
+
+      const name = document.createElement("div");
+      name.className = "m-name";
+      name.textContent = available ? mission.name : (mission.name || "Coming soon");
+
+      const meta = document.createElement("div");
+      meta.className = "m-meta";
+      meta.textContent = available
+        ? mission.maps.length + (mission.maps.length === 1 ? " map" : " maps")
+        : "Coming soon";
+
+      card.append(num, name, meta);
+      if (available) card.addEventListener("click", () => openMission(mission));
+      el.missionGrid.appendChild(card);
+    }
+  }
+
+  function showHub() {
+    deselect();
+    state.mission = null;
+    el.stage.hidden = true;
+    el.toolbar.hidden = true;
+    el.hub.hidden = false;
+    el.img.removeAttribute("src");
+    try { localStorage.removeItem(STORAGE_PREFIX + "lastMission"); } catch (e) {}
+  }
+
+  function openMission(mission) {
+    if (!mission.maps.length) return;
+    state.mission = mission;
+    el.hub.hidden = true;
+    el.toolbar.hidden = false;
+    el.stage.hidden = false;         // must be visible before fitView measures it
+    populateFloorSelect(mission);
+    try { localStorage.setItem(STORAGE_PREFIX + "lastMission", String(mission.number)); } catch (e) {}
+    // resume the last floor viewed in this mission, else the first
+    let last = null;
+    try { last = localStorage.getItem(STORAGE_PREFIX + "lastMap:" + mission.id); } catch (e) {}
+    const start = mission.maps.find((m) => m.id === last) || mission.maps[0];
+    loadMap(start.id);
+  }
+
+  // =========================================================================
   // Map loading
   // =========================================================================
-  function populateMapSelect() {
+  function populateFloorSelect(mission) {
     el.mapSelect.innerHTML = "";
-    const byMission = {};
-    for (const m of MAPS) (byMission[m.mission] = byMission[m.mission] || []).push(m);
-    for (const mission of Object.keys(byMission)) {
-      const grp = document.createElement("optgroup");
-      grp.label = mission;
-      for (const m of byMission[mission]) {
-        const opt = document.createElement("option");
-        opt.value = m.id;
-        opt.textContent = m.name;
-        grp.appendChild(opt);
-      }
-      el.mapSelect.appendChild(grp);
+    for (const m of mission.maps) {
+      const opt = document.createElement("option");
+      opt.value = m.id;
+      opt.textContent = m.name;
+      el.mapSelect.appendChild(opt);
     }
   }
 
   function loadMap(id) {
-    const map = MAPS.find((m) => m.id === id);
+    const map = state.mission && state.mission.maps.find((m) => m.id === id);
     if (!map) return;
     state.mapId = id;
     state.map = map;
@@ -519,7 +574,7 @@
     el.mapSelect.value = id;
 
     el.img.onload = () => {
-      // if manifest lacked real dimensions, adopt the loaded ones
+      // if the manifest lacked dimensions, adopt the image's natural size
       if (!map.width || !map.height) {
         map.width = el.img.naturalWidth || map.width || 1000;
         map.height = el.img.naturalHeight || map.height || 1000;
@@ -529,10 +584,10 @@
       updateButtons();
       updateSizeGroup();
     };
-    el.img.alt = map.mission + " — " + map.name;
+    el.img.alt = state.mission.name + " — " + map.name;
     el.img.src = map.src;
 
-    try { localStorage.setItem(STORAGE_PREFIX + "lastMap", id); } catch (e) {}
+    try { localStorage.setItem(STORAGE_PREFIX + "lastMap:" + state.mission.id, id); } catch (e) {}
   }
 
   // =========================================================================
@@ -541,8 +596,9 @@
   function init() {
     buildSwatches();
     setColor(state.color);
-    populateMapSelect();
+    buildHub();
 
+    el.backBtn.addEventListener("click", showHub);
     el.mapSelect.addEventListener("change", () => loadMap(el.mapSelect.value));
     el.stampBtn.addEventListener("click", () => setTool("stamp"));
     el.eraserBtn.addEventListener("click", () => setTool("eraser"));
@@ -566,9 +622,13 @@
     // block context menu on long-press / right click over the map
     el.viewport.addEventListener("contextmenu", (e) => e.preventDefault());
 
-    window.addEventListener("resize", () => { if (state.map) fitView(); });
+    window.addEventListener("resize", () => { if (state.mission && state.map) fitView(); });
     document.addEventListener("keydown", (e) => {
+      if (el.hub.hidden === false) {
+        if (e.key === "Escape") return; // nothing to do on the hub
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
+      else if (e.key === "Escape" && state.mission) showHub();
       else if (e.key === "e") setTool("eraser");
       else if (e.key === "s") setTool("stamp");
       else if ((e.key === "Delete" || e.key === "Backspace") && state.selectedId) {
@@ -576,10 +636,8 @@
       }
     });
 
-    let last = STORAGE_PREFIX + "lastMap";
-    try { last = localStorage.getItem(STORAGE_PREFIX + "lastMap"); } catch (e) { last = null; }
-    const startId = MAPS.find((m) => m.id === last) ? last : (MAPS[0] && MAPS[0].id);
-    if (startId) loadMap(startId);
+    // Start on the hub so the user picks a mission first.
+    showHub();
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {

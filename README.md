@@ -1,11 +1,13 @@
 # RoN Maps — Sinuous Trail
 
-A dead-simple, installable **PWA** for marking cleared rooms on the *Ready or Not*
-**Sinuous Trail** mission blueprints. Tap a room to stamp an **X**; each X is a real object
-you can select, recolor, and resize. Works with touch (phone/tablet) and mouse (Windows).
+A dead-simple, installable **PWA** for marking cleared rooms on *Ready or Not* mission
+blueprints. Start on the **mission hub**, pick a mission, then tap a room to stamp an **X**.
+Each X is a real object you can select, recolor, and resize. Works with touch (phone/tablet)
+and mouse (Windows).
 
-> Currently scoped to the **Sinuous Trail** mission and its **black-and-white** blueprints.
-> More missions/maps drop in later via one manifest file.
+> The hub has all **26 missions**. Only **Sinuous Trail (Mission 7)** has maps so far —
+> the rest show as "Coming soon" until you add them. Everything is driven by one file
+> (`js/maps.js`), so adding a mission is just an entry + some image files.
 
 ## Features
 - **Tap to stamp an X** where you cleared a room (default tool).
@@ -17,27 +19,37 @@ you can select, recolor, and resize. Works with touch (phone/tablet) and mouse (
 - **Saved per map** in your browser (localStorage) — marks survive refresh/close.
 - **Installable & offline** — "Add to Home Screen"; app shell + maps are cached.
 
-## Add the real maps
-The app ships with two labeled **placeholder** floors so it runs immediately. To use the real
-black-and-white blueprints:
+## Swap in the real Sinuous Trail maps
+Sinuous Trail ships with three labeled **placeholder** floors so the app runs immediately.
+To use the real blueprints, just **overwrite the placeholder files** with your images —
+same names, no code changes:
 
-1. Put each image in `assets/maps/` (PNG, JPG, or SVG).
-2. Edit **`js/maps.js`** — one entry per floor:
+- `assets/maps/sinuous-trail-ground.png`
+- `assets/maps/sinuous-trail-floor-1.png`
+- `assets/maps/sinuous-trail-floor-2.png`
+
+(If you'd rather keep `.jpg`, drop the `.jpg` in and change that floor's `src` in
+`js/maps.js` to match.)
+
+## Add another mission
+1. Put its images in `assets/maps/`.
+2. In **`js/maps.js`**, add an entry to `MISSION_DATA`, keyed by the mission number (1–26):
    ```js
-   {
-     id: "sinuous-trail-floor-1",   // unique; used as the save key
-     mission: "Sinuous Trail",      // groups floors in the picker
-     name: "Ground Floor",          // shown in the picker
-     src: "assets/maps/ground.png", // path under assets/maps/
-     width: 2048, height: 1536      // the image's natural pixel size
-   }
+   12: {
+     name: "Mission Name",
+     maps: [
+       { id: "mission-12-ground",  name: "Ground",  src: "assets/maps/mission-12-ground.png" },
+       { id: "mission-12-floor-1", name: "Floor 1", src: "assets/maps/mission-12-floor-1.png" },
+     ],
+   },
    ```
-   (If you don't know the pixel size, leave `width`/`height` out — the app reads it from the
-   loaded image. Setting them explicitly is best.)
+   - `id` must be unique (it's the per-map save key for your marks).
+   - `name` is the floor label; list floors in the order you want.
+   - `width`/`height` are optional — omit them and the app uses the image's natural size.
 3. Add the same `src` paths to `CACHE_ASSETS` in **`service-worker.js`** and bump
    `CACHE_VERSION` so the new maps cache for offline use.
 
-Adding a whole new mission later = just keep appending entries with a different `mission`.
+That mission's card turns from "Coming soon" to playable in the hub automatically.
 
 ## Run locally
 A service worker needs a real origin, so open it over HTTP, not `file://`:
@@ -56,4 +68,5 @@ python3 -m http.server 8080
 All asset paths are relative, so it works from the `/<repo>/` Pages subpath.
 
 ## Keyboard shortcuts (desktop)
-- `S` stamp · `E` eraser · `Ctrl/Cmd+Z` undo · `Delete`/`Backspace` remove selected X.
+- `S` stamp · `E` eraser · `Ctrl/Cmd+Z` undo · `Delete`/`Backspace` remove selected X ·
+  `Esc` back to the mission hub.

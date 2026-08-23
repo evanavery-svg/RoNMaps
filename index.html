@@ -14,10 +14,23 @@
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <header class="toolbar" id="toolbar">
+  <!-- ===================== HUB (mission picker) ===================== -->
+  <section class="hub" id="hub">
+    <header class="hub-head">
+      <h1 class="hub-title">Ready or Not — Maps</h1>
+      <p class="hub-sub">Pick a mission</p>
+    </header>
+    <div class="mission-grid" id="missionGrid"></div>
+  </section>
+
+  <!-- ===================== MAP VIEW ===================== -->
+  <header class="toolbar" id="toolbar" hidden>
+    <div class="tb-group">
+      <button id="backBtn" class="tool" title="Back to missions">‹<span class="tool-txt"> Missions</span></button>
+    </div>
     <div class="tb-group tb-maps">
-      <label class="tb-label" for="mapSelect">Map</label>
-      <select id="mapSelect" class="map-select" aria-label="Select map"></select>
+      <label class="tb-label" for="mapSelect">Floor</label>
+      <select id="mapSelect" class="map-select" aria-label="Select floor"></select>
     </div>
 
     <div class="tb-group">
@@ -48,7 +61,7 @@
     </div>
   </header>
 
-  <main class="stage" id="stage">
+  <main class="stage" id="stage" hidden>
     <div class="viewport" id="viewport">
       <div class="canvas" id="canvas">
         <img id="mapImg" class="map-img" alt="" draggable="false" />
