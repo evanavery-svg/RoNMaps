@@ -213,11 +213,15 @@ body {
   line-height: 1.2; word-break: break-word;
 }
 
-/* ---------------- Stage (stacked scroll of floors), right of the rail ---------------- */
+/* ---------------- Stage (stacked scroll of floors), right of the rail ----------------
+   NOT position:fixed — on iOS, fixed elements don't magnify with pinch-zoom, which kept
+   the map + markers from scaling. Normal flow (with a left margin for the rail) lets
+   pinch-zoom scale the map and its X/W markers together. */
 .stage {
-  position: fixed;
-  top: 0; right: 0; bottom: 0;
-  left: var(--rail);
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-left: var(--rail);
   background: var(--stage);
   overflow: hidden;
 }
