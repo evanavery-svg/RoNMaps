@@ -9,6 +9,7 @@
   --danger: #b23b3b;
   --stage: #2a2d34;
   --tap: 44px;
+  --rail: 132px;   /* width of the left toolbar rail */
 }
 
 * { box-sizing: border-box; }
@@ -114,32 +115,39 @@ body {
   letter-spacing: .03em;
 }
 
-/* ---------------- Toolbar ---------------- */
+/* ---------------- Toolbar: fixed vertical LEFT rail, always visible ---------------- */
 .toolbar {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: var(--rail);
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 8px;
   padding-top: max(8px, env(safe-area-inset-top));
+  padding-left: max(8px, env(safe-area-inset-left));
   background: var(--toolbar);
-  border-bottom: 1px solid var(--line);
-  z-index: 10;
-  transition: margin-top .22s ease;   /* auto-hide slides it up out of the flow */
+  border-right: 1px solid var(--line);
+  z-index: 20;
+  overflow-y: auto;              /* scroll the rail if the controls are taller than the screen */
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  transform-origin: 0 0;         /* pinned to the visual viewport during pinch-zoom (JS) */
 }
-.tb-group { display: flex; align-items: center; gap: 6px; }
+.tb-group { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.tb-group + .tb-group { padding-top: 8px; border-top: 1px solid var(--line); }
+.tb-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 
 /* Floor quick-jump pills */
-.tb-floornav { flex-wrap: wrap; }
+.tb-floornav { display: flex; flex-direction: column; gap: 6px; }
 .floor-pill {
-  min-height: 34px; padding: 0 12px;
+  min-height: 34px; padding: 0 10px;
   background: var(--toolbar-2); color: var(--muted);
-  border: 1px solid var(--line); border-radius: 999px;
+  border: 1px solid var(--line); border-radius: 8px;
   font-size: 13px; cursor: pointer;
 }
 .floor-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.tb-group + .tb-group { padding-left: 8px; border-left: 1px solid var(--line); }
-.tb-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 
 .map-select {
   appearance: none;
@@ -155,9 +163,10 @@ body {
 .tool {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   min-height: var(--tap);
-  padding: 6px 12px;
+  padding: 6px 10px;
   background: var(--toolbar-2);
   color: var(--text);
   border: 1px solid var(--line);
@@ -173,8 +182,11 @@ body {
 .tool-x { font-weight: 800; min-width: 1ch; text-align: center; }
 .tool-ico { font-size: 15px; }
 
+/* Swatches wrap into a small grid inside the rail */
+.tb-colors { flex-direction: row; flex-wrap: wrap; gap: 6px; }
 .swatch {
-  width: var(--tap); height: 32px;
+  flex: 1 1 calc(33% - 6px);
+  min-width: 30px; height: 30px;
   border-radius: 8px;
   border: 2px solid var(--line);
   background: var(--sw);
@@ -184,8 +196,8 @@ body {
 .swatch.active { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
 
 .color-chip {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: var(--tap); height: var(--tap);
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: var(--tap);
   border: 1px solid var(--line); border-radius: 8px;
   background: var(--toolbar-2); overflow: hidden; cursor: pointer;
 }
@@ -193,18 +205,19 @@ body {
   width: 150%; height: 150%; border: none; background: none; padding: 0; cursor: pointer;
 }
 
-.tb-size input[type="range"] { width: 140px; accent-color: var(--accent); height: var(--tap); }
+.tb-size { gap: 4px; }
+.tb-size input[type="range"] { width: 100%; accent-color: var(--accent); height: 32px; }
 
 .tb-title {
-  font-size: 15px; font-weight: 650; color: var(--text);
-  max-width: 40vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 14px; font-weight: 650; color: var(--text);
+  line-height: 1.2; word-break: break-word;
 }
 
-/* ---------------- Stage (stacked scroll of floors) ---------------- */
+/* ---------------- Stage (stacked scroll of floors), right of the rail ---------------- */
 .stage {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  left: var(--rail);
   background: var(--stage);
   overflow: hidden;
 }
@@ -326,11 +339,11 @@ body {
 }
 
 @media (max-width: 560px) {
+  :root { --rail: 96px; }
   .tool-txt { display: none; }
-  .tb-group + .tb-group { padding-left: 6px; }
-  .tb-size input[type="range"] { width: 96px; }
+  .tb-label { font-size: 10px; }
+  .tb-title { font-size: 12px; }
   .hint { font-size: 12px; }
-  .tb-title { max-width: 34vw; }
   .install-btn { position: static; margin: 0; }
   .hub-top { flex-direction: column; gap: 8px; }
 }

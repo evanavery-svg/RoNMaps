@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.5";
+  const APP_VERSION = "0.6";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -705,7 +705,7 @@
     el.hub.hidden = true;
     el.toolbar.hidden = false;
     el.stage.hidden = false;      // must be visible before we measure/observe
-    showToolbar();
+    pinRail();
     buildFloors(mission);
     buildFloorNav(mission);
     layoutFloors();
@@ -748,8 +748,6 @@
   function jumpToFloor(idx) {
     const f = state.floors[idx];
     if (!f) return;
-    suppressHideUntil = performance.now() + 800;  // don't let the jump-scroll hide the toolbar
-    showToolbar();
     f.section.scrollIntoView({ behavior: "smooth", block: "start" });
     setActiveFloor(idx);
   }
@@ -779,30 +777,21 @@
     el.scroller.scrollTop += (targetY - sc.top) - sc.height / 2;
   }
 
-  // Auto-hide the toolbar while scrolling down a map, reveal it scrolling up —
-  // gives more blueprint on screen (helps most on a landscape iPad).
-  let tbHidden = false, lastScrollTop = 0, suppressHideUntil = 0;
-  function showToolbar() {
-    tbHidden = false;
-    el.toolbar.style.marginTop = "0px";
+  // Keep the left rail glued to the VISUAL viewport so it stays on screen (and a
+  // constant size) while the page is pinch-zoomed — otherwise a fixed element gets
+  // left behind in the layout viewport and scrolls out of view when you zoom in.
+  function pinRail() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    el.toolbar.style.transform =
+      "translate(" + vv.offsetLeft + "px, " + vv.offsetTop + "px) scale(" + (1 / vv.scale) + ")";
   }
-  function hideToolbar() {
-    if (tbHidden) return;
-    tbHidden = true;
-    el.toolbar.style.marginTop = -el.toolbar.offsetHeight + "px";
-  }
-  function onScroll() {
-    const st = el.scroller.scrollTop;
-    // Keep the toolbar out while jump-scrolling or while a marker is selected
-    // (so the size slider stays reachable).
-    if (performance.now() < suppressHideUntil || state.selectedId != null) {
-      showToolbar(); lastScrollTop = st; return;
-    }
-    if (st < 40) { showToolbar(); lastScrollTop = st; return; }
-    const dy = st - lastScrollTop;
-    if (dy > 8) hideToolbar();
-    else if (dy < -8) showToolbar();
-    lastScrollTop = st;
+  function setupViewportPin() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    vv.addEventListener("resize", pinRail);
+    vv.addEventListener("scroll", pinRail);
+    pinRail();
   }
 
   // =========================================================================
@@ -881,8 +870,6 @@
     el.scroller.classList.remove("zoomed");
     el.floorNav.innerHTML = "";
     el.floorNav.hidden = true;
-    showToolbar();
-    lastScrollTop = 0;
   }
 
   // =========================================================================
@@ -914,10 +901,12 @@
     el.scroller.addEventListener("pointerup", onPointerUp);
     el.scroller.addEventListener("pointercancel", onPointerCancel);
     el.scroller.addEventListener("contextmenu", (e) => e.preventDefault());
-    el.scroller.addEventListener("scroll", onScroll, { passive: true });
+
+    // Keep the left rail pinned to the visual viewport during pinch-zoom.
+    setupViewportPin();
 
     // Re-fit floors when the screen changes (e.g. rotating the iPad).
-    const relayout = () => { if (state.mission) layoutFloors(); };
+    const relayout = () => { if (state.mission) { layoutFloors(); pinRail(); } };
     window.addEventListener("resize", relayout);
     window.addEventListener("orientationchange", () => setTimeout(relayout, 250));
 
