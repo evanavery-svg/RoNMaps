@@ -12,6 +12,15 @@
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" href="css/styles.css" />
+  <script>
+    // Apply the saved theme before first paint so there's no flash of the wrong one.
+    (function () {
+      try {
+        var t = localStorage.getItem("ronmaps:sinuous-trail:theme");
+        if (t === "night" || t === "day") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <!-- Brief branded splash on first load (skipped under reduced motion) -->
@@ -38,6 +47,11 @@
           <input type="checkbox" id="hideComingSoon" />
           <span>Hide coming soon</span>
         </label>
+        <div class="theme-seg" id="themeSeg" role="group" aria-label="Theme">
+          <button type="button" data-theme-val="tactical" title="Tactical — the default dark briefing look">Tactical</button>
+          <button type="button" data-theme-val="night" title="Night Ops — for a dark room; also dims the blueprint">Night</button>
+          <button type="button" data-theme-val="day" title="Daylight — light UI for a bright room">Day</button>
+        </div>
       </div>
       <p class="ios-install-hint" id="iosHint" hidden>To install: tap the Share button, then “Add to Home Screen”.</p>
     </header>
@@ -105,6 +119,7 @@
 
     <div class="tb-group">
       <button id="shareBtn" class="tool" title="Copy a link to this marked-up mission">⇪<span class="tool-txt">Share</span></button>
+      <button id="themeCycleBtn" class="tool theme-cycle" title="Switch theme">◐<span class="tool-txt" id="themeCycleLabel">Theme</span></button>
     </div>
 
     <div class="tb-group tb-size" id="sizeGroup" hidden>

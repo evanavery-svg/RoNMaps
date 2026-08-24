@@ -17,6 +17,76 @@
   --rail: 132px;   /* width of the left toolbar rail */
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --r: 6px;        /* squarer corners than the old rounded look */
+
+  /* surface tokens — these are what the other themes re-point */
+  --rail-top: #101822;                 /* rail gradient top */
+  --hub-glow: #12202e;                 /* radial glow behind the hub */
+  --scrim-a: rgba(8,11,16,.74);        /* card thumbnail scrim */
+  --scrim-b: rgba(8,11,16,.92);
+  --scrim-c: rgba(8,11,16,.97);
+  --label-bg: rgba(8,11,16,.86);       /* sticky floor label */
+  --grid-line: rgba(125,175,225,.045); /* backdrop grid */
+  --scan: rgba(0,0,0,.16);             /* backdrop scanlines */
+  --vignette: rgba(0,0,0,.42);
+  --modal-bg: rgba(0,0,0,.6);
+  --shadow: rgba(0,0,0,.5);
+  --on-accent: #fff;                   /* text/marks on an accent fill */
+  --map-filter: none;                  /* per-theme blueprint treatment */
+  --splash-a: #12202e;
+  --splash-b: #05070a;
+}
+
+/* ---- NIGHT OPS: for a dark room. Near-black chrome, red-only accents, and the
+   blueprint itself is dimmed so a bright blue map doesn't wreck your eyes. ---- */
+:root[data-theme="night"] {
+  --bg: #000000;
+  --toolbar: #050607;
+  --toolbar-2: #0c0f12;
+  --line: #1d2329;
+  --edge: rgba(255,255,255,.04);
+  --text: #d8dee5;
+  --muted: #7f8a97;   /* light enough to clear 4.5:1 on the night card surface */
+  --amber: #d08420;
+  --ok: #2f9e60;
+  --stage: #000000;
+  --rail-top: #080a0c;
+  --hub-glow: #0a1016;
+  --scrim-a: rgba(0,0,0,.80); --scrim-b: rgba(0,0,0,.94); --scrim-c: rgba(0,0,0,.98);
+  --label-bg: rgba(0,0,0,.9);
+  --grid-line: rgba(120,150,180,.03);
+  --scan: rgba(0,0,0,.22);
+  --vignette: rgba(0,0,0,.6);
+  --modal-bg: rgba(0,0,0,.78);
+  --shadow: rgba(0,0,0,.7);
+  --map-filter: brightness(.52) saturate(.75) contrast(1.06);
+  --splash-a: #0a1016; --splash-b: #000000;
+}
+
+/* ---- DAYLIGHT: for a bright room. Light chrome, dark text, map at full punch. ---- */
+:root[data-theme="day"] {
+  --bg: #eceff3;
+  --toolbar: #ffffff;
+  --toolbar-2: #f1f4f8;
+  --line: #c6cedb;
+  --edge: rgba(0,0,0,.05);
+  --text: #131922;
+  --muted: #5a6675;
+  --accent: #c81e1e;
+  --amber: #a86407;
+  --ok: #1c7a45;
+  --danger: #b52d2d;
+  --stage: #d9dee6;
+  --rail-top: #ffffff;
+  --hub-glow: #ffffff;
+  --scrim-a: rgba(255,255,255,.62); --scrim-b: rgba(255,255,255,.9); --scrim-c: rgba(255,255,255,.96);
+  --label-bg: rgba(255,255,255,.92);
+  --grid-line: rgba(40,70,110,.055);
+  --scan: rgba(0,0,0,.02);
+  --vignette: rgba(20,30,45,.14);
+  --modal-bg: rgba(30,40,55,.42);
+  --shadow: rgba(20,30,45,.22);
+  --map-filter: contrast(1.04) saturate(1.05);
+  --splash-a: #ffffff; --splash-b: #dfe4ec;
 }
 
 /* technical label treatment used across the UI */
@@ -48,9 +118,9 @@ body::before {
   content: "";
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background:
-    repeating-linear-gradient(0deg, rgba(125,175,225,.045) 0 1px, transparent 1px 44px),
-    repeating-linear-gradient(90deg, rgba(125,175,225,.045) 0 1px, transparent 1px 44px),
-    repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 2px, transparent 2px 4px);
+    repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px 44px),
+    repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px 44px),
+    repeating-linear-gradient(0deg, var(--scan) 0 2px, transparent 2px 4px);
 }
 .hub, .toolbar, .stage, .modal, .splash { position: relative; z-index: 1; }
 
@@ -61,7 +131,7 @@ body::before {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: max(20px, env(safe-area-inset-top)) 16px 32px;
-  background: radial-gradient(ellipse at 50% -10%, #12202e 0, var(--bg) 62%);
+  background: radial-gradient(ellipse at 50% -10%, var(--hub-glow) 0, var(--bg) 62%);
 }
 .hub-head { text-align: center; margin: 10px auto 22px; max-width: 920px; }
 .hub-top { display: flex; align-items: center; justify-content: center; gap: 12px; position: relative; }
@@ -79,7 +149,7 @@ body::before {
 .install-btn {
   position: absolute; right: 0;
   min-height: 38px; padding: 0 14px;
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--on-accent);
   border: none; border-radius: 8px;
   font-size: 14px; font-weight: 600; cursor: pointer;
 }
@@ -101,6 +171,26 @@ body::before {
 .toggle input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
 
 .hub-empty { text-align: center; color: var(--muted); margin: 24px 0; }
+
+/* ---------------- Theme switcher ---------------- */
+.theme-seg {
+  display: inline-flex; gap: 0;
+  border: 1px solid var(--line); border-radius: var(--r);
+  overflow: hidden; background: var(--toolbar-2);
+}
+.theme-seg button {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  padding: 0 12px; min-height: 38px;
+  background: transparent; color: var(--muted);
+  border: 0; border-left: 1px solid var(--line);
+  cursor: pointer;
+  transition: background-color .16s ease, color .16s ease;
+}
+.theme-seg button:first-child { border-left: 0; }
+.theme-seg button:hover { color: var(--text); }
+.theme-seg button.active { background: var(--accent); color: var(--on-accent); }
+/* compact cycle button in the rail */
+.theme-cycle { justify-content: center; }
 
 .mission-grid {
   display: grid;
@@ -137,7 +227,7 @@ body::before {
 }
 .mission-card::before {   /* readability scrim over the thumbnail */
   content: ""; position: absolute; inset: 0; z-index: -1;
-  background: linear-gradient(180deg, rgba(8,11,16,.74) 0%, rgba(8,11,16,.92) 60%, rgba(8,11,16,.97) 100%);
+  background: linear-gradient(180deg, var(--scrim-a) 0%, var(--scrim-b) 60%, var(--scrim-c) 100%);
 }
 .mission-card .m-num { font-size: 11px; color: var(--muted); }
 .mission-card .m-name { font-size: 17px; font-weight: 700; line-height: 1.2; }
@@ -164,7 +254,7 @@ body::before {
 .mission-card.available:hover {
   border-color: var(--accent);
   transform: translateY(-3px);
-  box-shadow: 0 10px 26px rgba(0,0,0,.5), 0 0 0 1px rgba(224,36,36,.25);
+  box-shadow: 0 10px 26px var(--shadow), 0 0 0 1px rgba(224,36,36,.25);
 }
 .mission-card.available:hover .m-thumb { opacity: .38; transform: scale(1.05); }
 .mission-card.available::after {
@@ -205,9 +295,9 @@ body::before {
   padding: 8px;
   padding-top: max(8px, env(safe-area-inset-top));
   padding-left: max(8px, env(safe-area-inset-left));
-  background: linear-gradient(180deg, #101822 0%, var(--toolbar) 60%);
+  background: linear-gradient(180deg, var(--rail-top) 0%, var(--toolbar) 60%);
   border-right: 1px solid var(--line);
-  box-shadow: inset -1px 0 0 rgba(255,255,255,.03), 4px 0 18px rgba(0,0,0,.45);
+  box-shadow: inset -1px 0 0 var(--edge), 4px 0 18px var(--shadow);
   z-index: 20;
   overflow-y: auto;              /* scroll the rail if the controls are taller than the screen */
   overflow-x: hidden;
@@ -247,7 +337,7 @@ body::before {
               color .14s ease, transform .08s ease;
 }
 .floor-pill:active { transform: scale(.95); }
-.floor-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.floor-pill.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
 .map-select {
   appearance: none;
@@ -283,11 +373,11 @@ body::before {
 .tool:hover { border-color: #3a5570; }
 .tool:active:not(:disabled) { transform: scale(.95); }
 .tool:disabled { opacity: .35; cursor: default; }
-.tool.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tool.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 /* active tool gets a bright left bar — reads at a glance in peripheral vision */
 .tool.active::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-  background: #fff; opacity: .9;
+  background: var(--on-accent); opacity: .9;
 }
 .tool-danger.active, .tool-danger:hover:not(:disabled) { border-color: var(--danger); }
 .tool-x { font-weight: 800; min-width: 1ch; text-align: center; }
@@ -341,7 +431,7 @@ body::before {
 /* vignette to focus attention on the blueprint */
 .stage::after {
   content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 4;
-  background: radial-gradient(ellipse at 50% 45%, transparent 52%, rgba(0,0,0,.42) 100%);
+  background: radial-gradient(ellipse at 50% 45%, transparent 52%, var(--vignette) 100%);
 }
 .floor-scroll {
   position: absolute;
@@ -365,7 +455,7 @@ body::before {
   letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--muted);
-  background: rgba(8, 11, 16, .86);
+  background: var(--label-bg);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
   box-shadow: 0 1px 0 rgba(255,255,255,.04);
@@ -417,6 +507,9 @@ body::before {
   -webkit-user-drag: none;
   user-select: none;
   background: #fff;
+  /* per-theme treatment: Night dims the bright blueprint, Daylight adds punch */
+  filter: var(--map-filter);
+  transition: filter .3s ease;
 }
 .overlay {
   position: absolute;
@@ -502,7 +595,7 @@ body::before {
 .splash {
   position: fixed; inset: 0; z-index: 90;
   display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(ellipse at 50% 45%, #12202e 0, #05070a 70%);
+  background: radial-gradient(ellipse at 50% 45%, var(--splash-a) 0, var(--splash-b) 70%);
   transition: opacity .45s ease, visibility .45s;
 }
 .splash.gone { opacity: 0; visibility: hidden; pointer-events: none; }
@@ -540,7 +633,7 @@ body::before {
 .modal {
   position: fixed; inset: 0; z-index: 70;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,.6);
+  background: var(--modal-bg);
   backdrop-filter: blur(3px);
   animation: fade-in .18s ease-out;
   padding: 20px;
@@ -552,7 +645,7 @@ body::before {
   background: var(--toolbar); color: var(--text);
   border: 1px solid var(--line); border-radius: 14px;
   padding: 22px;
-  box-shadow: 0 18px 50px rgba(0,0,0,.55);
+  box-shadow: 0 18px 50px var(--shadow);
   animation: sheet-in .22s cubic-bezier(.22,.61,.36,1);
 }
 .sheet-title { margin: 0 0 8px; font-size: 20px; }

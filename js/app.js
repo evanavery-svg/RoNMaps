@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.14";
+  const APP_VERSION = "0.15";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -44,6 +44,9 @@
     layerPenBtn: document.getElementById("layerPenBtn"),
     eraserBtn: document.getElementById("eraserBtn"),
     shareBtn: document.getElementById("shareBtn"),
+    themeSeg: document.getElementById("themeSeg"),
+    themeCycleBtn: document.getElementById("themeCycleBtn"),
+    themeCycleLabel: document.getElementById("themeCycleLabel"),
     shareImport: document.getElementById("shareImport"),
     shareSummary: document.getElementById("shareSummary"),
     shareMergeBtn: document.getElementById("shareMergeBtn"),
@@ -954,6 +957,51 @@
     eraser: "Eraser: tap a mark to remove it.",
   };
 
+  // =========================================================================
+  // Themes — each one solves a lighting condition, not just a colour scheme.
+  //   tactical : default dark briefing look
+  //   night    : near-black for a dark room; also dims the bright blueprint
+  //   day      : light UI for a bright room; blueprint at full punch
+  // =========================================================================
+  const THEMES = ["tactical", "night", "day"];
+  const THEME_LABEL = { tactical: "Tactical", night: "Night", day: "Day" };
+  // colour the PWA/browser chrome to match
+  const THEME_META = { tactical: "#0d1219", night: "#050607", day: "#ffffff" };
+
+  function currentTheme() {
+    const t = document.documentElement.getAttribute("data-theme");
+    return THEMES.includes(t) ? t : "tactical";
+  }
+
+  function setTheme(name) {
+    const theme = THEMES.includes(name) ? name : "tactical";
+    // "tactical" is the bare :root, so no attribute needed
+    if (theme === "tactical") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", theme);
+
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", THEME_META[theme]);
+
+    updateThemeButtons();
+    try { localStorage.setItem(STORAGE_PREFIX + "theme", theme); } catch (e) {}
+  }
+
+  function cycleTheme() {
+    const next = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
+    setTheme(next);
+    toast(THEME_LABEL[next] + " theme");
+  }
+
+  function updateThemeButtons() {
+    const t = currentTheme();
+    if (el.themeSeg) {
+      for (const b of el.themeSeg.children) {
+        b.classList.toggle("active", b.dataset.themeVal === t);
+      }
+    }
+    if (el.themeCycleLabel) el.themeCycleLabel.textContent = THEME_LABEL[t];
+  }
+
   // Show/hide a whole class of marks. Nothing is deleted — they're just not drawn.
   function toggleLayer(layer) { setLayer(layer, !state.layers[layer]); }
 
@@ -1542,6 +1590,7 @@
     setColor(state.color);
     el.sizeRange.value = Math.round(clamp(state.stampSize, 16, 220));
     updateLayerButtons();
+    updateThemeButtons();   // the inline head script already applied the saved theme
     buildHub();
     el.appFoot.textContent = "© Avery LLC · v" + APP_VERSION;
 
@@ -1555,6 +1604,11 @@
     el.layerArrowBtn.addEventListener("click", () => toggleLayer("arrow"));
     el.layerPenBtn.addEventListener("click", () => toggleLayer("pen"));
     el.shareBtn.addEventListener("click", shareCurrentMission);
+    el.themeCycleBtn.addEventListener("click", cycleTheme);
+    el.themeSeg.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-theme-val]");
+      if (b) setTheme(b.dataset.themeVal);
+    });
     el.shareMergeBtn.addEventListener("click", () => applyShare("merge"));
     el.shareReplaceBtn.addEventListener("click", () => applyShare("replace"));
     el.shareCancelBtn.addEventListener("click", () => { pendingShare = null; el.shareImport.hidden = true; });
