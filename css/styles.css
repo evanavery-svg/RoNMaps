@@ -117,6 +117,9 @@ body {
 body::before {
   content: "";
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  /* three stacked repeating gradients over the whole screen: promote to its own
+     layer so it isn't re-rasterised on every scroll/zoom frame */
+  transform: translateZ(0);
   background:
     repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px 44px),
     repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px 44px),
@@ -303,6 +306,11 @@ body::before {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   transform-origin: 0 0;         /* pinned to the visual viewport during pinch-zoom (JS) */
+  /* own compositor layer: the rail is re-transformed every frame during a pinch, so
+     keep it off the main paint path and free of sub-pixel shimmer */
+  will-change: transform;
+  backface-visibility: hidden;
+  contain: paint;
 }
 .tb-group { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
 .tb-group + .tb-group { padding-top: 8px; border-top: 1px solid var(--line); }
@@ -494,7 +502,8 @@ body::before {
   width: 100%;
   margin: 0 auto;        /* center when fitted narrower than the viewport */
   background: #fff;       /* letterbox behind a map that isn't loaded yet */
-  will-change: transform; /* zoom animates transform (FLIP), not width */
+  /* NOTE: will-change is applied by JS only for the duration of the zoom animation —
+     leaving it on permanently keeps a full-size layer for every floor in memory. */
 }
 .floor-scroll.zoomed { overflow-x: auto; }   /* pan horizontally when a floor is zoomed in */
 /* While Arrow/Pen is active a one-finger drag must draw, not scroll */
@@ -622,7 +631,10 @@ body::before {
 
 /* ---------------- Screen transitions ---------------- */
 @keyframes screen-in { from { opacity: 0; transform: translateY(8px) scale(.995); } to { opacity: 1; transform: none; } }
-@keyframes rail-in  { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+/* Uses the independent `translate` property, NOT `transform`: the rail's transform is
+   owned by pinRail() (visual-viewport pinning) and an animation on `transform` would
+   clobber it mid-pinch. `translate` composes with it instead. */
+@keyframes rail-in  { from { opacity: 0; translate: -14px 0; } to { opacity: 1; translate: none; } }
 .hub.entering { animation: screen-in .3s cubic-bezier(.22,.61,.36,1); }
 .stage.entering { animation: screen-in .34s cubic-bezier(.22,.61,.36,1); }
 .toolbar.entering { animation: rail-in .34s cubic-bezier(.22,.61,.36,1); }

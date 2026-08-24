@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.15";
+  const APP_VERSION = "0.16";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1300,32 +1300,35 @@
     floor.wrap.style.transition = "none";
     floor.wrap.style.width = Math.round(nextW) + "px";
 
+    // Recentre INSTANTLY, in the same frame as the layout change. A smooth scroll here
+    // would run on its own timeline and desync from the transform animation, which is
+    // what made the zoom feel wobbly — now the single GPU transform carries all the
+    // visible motion and the scroll is already where it needs to be.
+    centerOn(floor, imgX, imgY);
+    if (!floor.zoomed && !state.floors.some((f) => f.zoomed)) {
+      el.scroller.classList.remove("zoomed");
+    }
+
     const ratio = prevW / nextW;
     if (!reducedMotion() && isFinite(ratio) && ratio > 0 && Math.abs(ratio - 1) > 0.01) {
       // zoom toward the tapped point
       floor.wrap.style.transformOrigin =
         (imgX / floor.map.width * 100) + "% " + (imgY / floor.map.height * 100) + "%";
       floor.wrap.style.transform = "scale(" + ratio + ")";
+      floor.wrap.style.willChange = "transform";   // promote for the animation only
       requestAnimationFrame(() => {
-        floor.wrap.style.transition = "transform .22s cubic-bezier(.22,.61,.36,1)";
+        floor.wrap.style.transition = "transform .26s cubic-bezier(.22,.61,.36,1)";
         floor.wrap.style.transform = "scale(1)";
       });
       clearTimeout(floor.zoomTimer);
       floor.zoomTimer = setTimeout(() => {
         floor.wrap.style.transition = "";
         floor.wrap.style.transform = "";
-      }, 280);
+        floor.wrap.style.willChange = "";          // release the layer again
+      }, 320);
     } else {
       floor.wrap.style.transform = "";
     }
-
-    // pan in the same frame so the scale and the recentering move together
-    requestAnimationFrame(() => {
-      centerOn(floor, imgX, imgY);
-      if (!floor.zoomed && !state.floors.some((f) => f.zoomed)) {
-        el.scroller.classList.remove("zoomed");
-      }
-    });
   }
   function centerOn(floor, imgX, imgY) {
     const rect = floor.img.getBoundingClientRect();
@@ -1334,24 +1337,39 @@
     const targetY = rect.top + (imgY / floor.map.height) * rect.height;
     const left = el.scroller.scrollLeft + (targetX - sc.left) - sc.width / 2;
     const top = el.scroller.scrollTop + (targetY - sc.top) - sc.height / 2;
-    el.scroller.scrollTo({ left, top, behavior: reducedMotion() ? "auto" : "smooth" });
+    el.scroller.scrollTo({ left, top, behavior: "auto" });
   }
 
   // Keep the left rail glued to the VISUAL viewport so it stays on screen (and a
   // constant size) while the page is pinch-zoomed — otherwise a fixed element gets
   // left behind in the layout viewport and scrolls out of view when you zoom in.
+  // visualViewport fires a burst of events during a pinch. Writing style.transform on
+  // each one thrashes style recalc on the main thread and the rail visibly swims, so
+  // coalesce into a single write per frame and skip no-op writes.
+  let pinRaf = 0, lastPin = "";
+
   function pinRail() {
+    if (pinRaf) return;
+    pinRaf = requestAnimationFrame(applyPin);
+  }
+  function applyPin() {
+    pinRaf = 0;
     const vv = window.visualViewport;
     if (!vv) return;
-    el.toolbar.style.transform =
-      "translate(" + vv.offsetLeft + "px, " + vv.offsetTop + "px) scale(" + (1 / vv.scale) + ")";
+    // round to whole pixels: sub-pixel values cause shimmer on the rail's text
+    const x = Math.round(vv.offsetLeft), y = Math.round(vv.offsetTop);
+    const s = (1 / vv.scale).toFixed(4);
+    const next = "translate3d(" + x + "px," + y + "px,0) scale(" + s + ")";
+    if (next === lastPin) return;          // nothing moved — don't touch the DOM
+    lastPin = next;
+    el.toolbar.style.transform = next;
   }
   function setupViewportPin() {
     const vv = window.visualViewport;
     if (!vv) return;
-    vv.addEventListener("resize", pinRail);
-    vv.addEventListener("scroll", pinRail);
-    pinRail();
+    vv.addEventListener("resize", pinRail, { passive: true });
+    vv.addEventListener("scroll", pinRail, { passive: true });
+    applyPin();
   }
 
   // =========================================================================
@@ -1383,6 +1401,7 @@
       img.className = "map-img";
       img.alt = mission.name + " — " + map.name;
       img.draggable = false;
+      img.decoding = "async";   // decode off the main thread so loads don't hitch
 
       const svg = document.createElementNS(SVGNS, "svg");
       svg.setAttribute("class", "overlay");
