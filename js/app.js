@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.10";
+  const APP_VERSION = "0.11";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -129,15 +129,22 @@
   // =========================================================================
   // Markers
   // =========================================================================
+  let justPlacedId = null;   // marker that should play the pop-in animation (once)
+  let placingTimer = null;
+
   function addMarker(floor, x, y) {
     pushUndo(floor);
     const m = { id: uid(), x, y, size: state.stampSize, color: state.color, type: state.stampType };
     floor.markers.push(m);
+    justPlacedId = m.id;
     clearSelection();            // a fresh stamp is NOT selected — tap it again to select
     saveFloor(floor);
     renderFloor(floor);
     updateSizeGroup();
     buzz(15);
+    // clear the flag so later re-renders don't replay the animation
+    clearTimeout(placingTimer);
+    placingTimer = setTimeout(() => { justPlacedId = null; }, 260);
     return m.id;
   }
   function deleteMarker(floor, id) {
@@ -212,15 +219,33 @@
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     const selId = (indexOf(floor) === state.selectedIndex) ? state.selectedId : null;
     for (const m of floor.markers) svg.appendChild(buildMarker(m, m.id === selId));
-    if (floor.countEl) floor.countEl.textContent = floor.markers.length ? " · " + floor.markers.length : "";
+    updateFloorCount(floor);
     updateButtons();
+  }
+
+  // Re-render ONE marker in place. Used during drag/resize so a gesture does O(1) DOM work
+  // instead of rebuilding every marker on the floor each frame.
+  function renderMarkerNode(floor, m) {
+    const selId = (indexOf(floor) === state.selectedIndex) ? state.selectedId : null;
+    const next = buildMarker(m, m.id === selId);
+    const old = floor.svg.querySelector('[data-id="' + m.id + '"]');
+    if (old) floor.svg.replaceChild(next, old);
+    else floor.svg.appendChild(next);
+  }
+
+  function updateFloorCount(floor) {
+    if (floor.countEl) {
+      floor.countEl.textContent = floor.markers.length ? " · " + floor.markers.length : "";
+    }
   }
 
   const W_SCALE = 0.82;  // render W a bit smaller so the X reads a little bigger
 
   function buildMarker(m, selected) {
     const g = document.createElementNS(SVGNS, "g");
-    g.setAttribute("class", "mark" + (selected ? " selected" : ""));
+    // `.placing` plays the pop-in once, only for a mark that was just stamped
+    const placing = m.id === justPlacedId;
+    g.setAttribute("class", "mark" + (selected ? " selected" : "") + (placing ? " placing" : ""));
     g.dataset.id = m.id;
 
     const rs = m.size * (m.type === "w" ? W_SCALE : 1); // rendered size for this shape
@@ -293,7 +318,11 @@
   // in layout-viewport CSS px.
   // =========================================================================
   function toImage(floor, clientX, clientY) {
-    const rect = floor.img.getBoundingClientRect();
+    return toImageRect(floor, floor.img.getBoundingClientRect(), clientX, clientY);
+  }
+  // Same math against an already-measured rect — lets a drag reuse one measurement per
+  // frame instead of forcing a layout read on every pointermove.
+  function toImageRect(floor, rect, clientX, clientY) {
     return {
       x: (clientX - rect.left) / rect.width * floor.map.width,
       y: (clientY - rect.top) / rect.height * floor.map.height,
@@ -381,31 +410,65 @@
     }
   }
 
+  // Drag/resize work is coalesced into ONE requestAnimationFrame per frame: pointermove
+  // just records the latest position, and the frame does the geometry + a single-marker
+  // DOM update. Keeps a 120Hz stream of events from rebuilding the floor dozens of times.
+  let gestureRaf = 0;
+
+  function scheduleGestureFrame() {
+    if (gestureRaf) return;
+    gestureRaf = requestAnimationFrame(() => {
+      gestureRaf = 0;
+      applyGestureFrame();
+    });
+  }
+
+  // Run any pending frame immediately (on pointerup) so the committed position is exact.
+  function flushGesture() {
+    if (!gestureRaf) return;
+    cancelAnimationFrame(gestureRaf);
+    gestureRaf = 0;
+    applyGestureFrame();
+  }
+
+  function applyGestureFrame() {
+    const p = press;
+    if (!p || (p.kind !== "resize" && p.kind !== "move")) return;
+    const m = markerById(p.floor, p.id);
+    if (!m) return;
+    // one measurement per frame, reused for this frame's math
+    if (!p.rect) p.rect = p.floor.img.getBoundingClientRect();
+    const img = toImageRect(p.floor, p.rect, p.lastX, p.lastY);
+
+    if (p.kind === "resize") {
+      m.size = clamp(Math.max(Math.abs(img.x - m.x), Math.abs(img.y - m.y)) * 2, 16, 8000);
+      el.sizeRange.value = Math.round(Math.min(220, m.size));
+    } else {
+      m.x = clamp(p.startX + (img.x - p.startImg.x), 0, p.floor.map.width);
+      m.y = clamp(p.startY + (img.y - p.startImg.y), 0, p.floor.map.height);
+    }
+    renderMarkerNode(p.floor, m);   // O(1) instead of rebuilding every marker
+  }
+
   function onPointerMove(e) {
     if (!press) return;
     if (press.kind === "resize") {
       e.preventDefault();
-      const m = markerById(press.floor, press.id);
-      if (!m) return;
-      const img = toImage(press.floor, e.clientX, e.clientY);
-      m.size = clamp(Math.max(Math.abs(img.x - m.x), Math.abs(img.y - m.y)) * 2, 16, 8000);
+      clearLongPress();          // a drag is not a long-press
+      press.lastX = e.clientX; press.lastY = e.clientY;
       press.changed = true;
-      renderFloor(press.floor);
-      el.sizeRange.value = Math.round(Math.min(220, m.size));
+      scheduleGestureFrame();
       return;
     }
     if (press.kind === "move") {
       const far = Math.hypot(e.clientX - press.downX, e.clientY - press.downY) > TAP_MOVE_TOLERANCE;
       if (!far && !press.changed) return;
       e.preventDefault();
-      const m = markerById(press.floor, press.id);
-      if (!m) return;
+      clearLongPress();          // once you're dragging, don't fire the delete timer
       if (!press.changed) { pushUndo(press.floor); press.changed = true; }
-      const img = toImage(press.floor, e.clientX, e.clientY);
-      m.x = clamp(press.startX + (img.x - press.startImg.x), 0, press.floor.map.width);
-      m.y = clamp(press.startY + (img.y - press.startImg.y), 0, press.floor.map.height);
+      press.lastX = e.clientX; press.lastY = e.clientY;
       press.moved = true;
-      renderFloor(press.floor);
+      scheduleGestureFrame();
       return;
     }
     if (Math.hypot(e.clientX - press.downX, e.clientY - press.downY) > TAP_MOVE_TOLERANCE) {
@@ -419,6 +482,7 @@
     clearLongPress();
     if (press.kind === "resize" || press.kind === "move") {
       el.scroller.releasePointerCapture && el.scroller.releasePointerCapture(e.pointerId);
+      flushGesture();   // apply any frame still pending so the final position is exact
     }
     const p = press;
     press = null;
@@ -464,6 +528,7 @@
 
   function onPointerCancel() {
     clearLongPress();
+    if (press && (press.kind === "resize" || press.kind === "move")) flushGesture();
     if (press && press.kind === "resize") commitResize(press);
     else if (press && press.kind === "move" && press.moved) commitDrag(press);
     press = null;
@@ -474,14 +539,17 @@
     if (p.changed) {
       if (m) state.stampSize = m.size;
       saveFloor(p.floor);
+      savePrefs();
     } else {
       p.floor.undoStack.pop(); // nothing changed — discard the snapshot we pushed
     }
+    renderFloor(p.floor);   // one exact full render after the fast per-frame updates
     updateButtons();
   }
 
   function commitDrag(p) {
     if (p.changed) saveFloor(p.floor); // undo snapshot was pushed on first move
+    renderFloor(p.floor);
     updateButtons();
   }
 
@@ -769,29 +837,66 @@
     setActiveFloor(idx);
   }
 
+  function reducedMotion() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
   // Double-tap toggles a floor between fit-to-view and zoomed-in (wider than the
-  // viewport, so you can pan horizontally). imgX/imgY are image px to center on.
+  // viewport, so you can pan horizontally). imgX/imgY are image px to zoom toward.
+  //
+  // Animated with FLIP: set the final width immediately (one layout), then apply the
+  // inverse scale and transition THAT back to 1. Transforms are GPU-composited, so the
+  // big blueprint doesn't re-layout every frame the way animating `width` would.
   function toggleZoom(floor, imgX, imgY) {
+    const prevW = floor.wrap.getBoundingClientRect().width;
     floor.zoomed = !floor.zoomed;
-    if (floor.zoomed) {
-      const availW = el.scroller.clientWidth || window.innerWidth;
-      const zoomW = Math.max((floor.fitWidth || availW) * 2.2, availW * 1.6);
-      floor.wrap.style.width = Math.round(zoomW) + "px";
-      el.scroller.classList.add("zoomed");
-      // center the tapped point after the wider layout settles
-      requestAnimationFrame(() => centerOn(floor, imgX, imgY));
+
+    const availW = el.scroller.clientWidth || window.innerWidth;
+    const nextW = floor.zoomed
+      ? Math.max((floor.fitWidth || availW) * 2.2, availW * 1.6)
+      : floor.fitWidth;
+
+    if (floor.zoomed) el.scroller.classList.add("zoomed");
+
+    // FLIP: jump to the new width, then play the scale back from the old one.
+    floor.wrap.style.transition = "none";
+    floor.wrap.style.width = Math.round(nextW) + "px";
+
+    const ratio = prevW / nextW;
+    if (!reducedMotion() && isFinite(ratio) && ratio > 0 && Math.abs(ratio - 1) > 0.01) {
+      // zoom toward the tapped point
+      floor.wrap.style.transformOrigin =
+        (imgX / floor.map.width * 100) + "% " + (imgY / floor.map.height * 100) + "%";
+      floor.wrap.style.transform = "scale(" + ratio + ")";
+      requestAnimationFrame(() => {
+        floor.wrap.style.transition = "transform .22s cubic-bezier(.22,.61,.36,1)";
+        floor.wrap.style.transform = "scale(1)";
+      });
+      clearTimeout(floor.zoomTimer);
+      floor.zoomTimer = setTimeout(() => {
+        floor.wrap.style.transition = "";
+        floor.wrap.style.transform = "";
+      }, 280);
     } else {
-      floor.wrap.style.width = Math.round(floor.fitWidth) + "px";
-      if (!state.floors.some((f) => f.zoomed)) el.scroller.classList.remove("zoomed");
+      floor.wrap.style.transform = "";
     }
+
+    // pan in the same frame so the scale and the recentering move together
+    requestAnimationFrame(() => {
+      centerOn(floor, imgX, imgY);
+      if (!floor.zoomed && !state.floors.some((f) => f.zoomed)) {
+        el.scroller.classList.remove("zoomed");
+      }
+    });
   }
   function centerOn(floor, imgX, imgY) {
     const rect = floor.img.getBoundingClientRect();
     const sc = el.scroller.getBoundingClientRect();
     const targetX = rect.left + (imgX / floor.map.width) * rect.width;
     const targetY = rect.top + (imgY / floor.map.height) * rect.height;
-    el.scroller.scrollLeft += (targetX - sc.left) - sc.width / 2;
-    el.scroller.scrollTop += (targetY - sc.top) - sc.height / 2;
+    const left = el.scroller.scrollLeft + (targetX - sc.left) - sc.width / 2;
+    const top = el.scroller.scrollTop + (targetY - sc.top) - sc.height / 2;
+    el.scroller.scrollTo({ left, top, behavior: reducedMotion() ? "auto" : "smooth" });
   }
 
   // Keep the left rail glued to the VISUAL viewport so it stays on screen (and a

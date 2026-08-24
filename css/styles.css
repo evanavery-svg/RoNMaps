@@ -147,6 +147,11 @@ body {
   border: 1px solid var(--line); border-radius: 8px;
   font-size: 13px; cursor: pointer;
 }
+.floor-pill {
+  transition: background-color .14s ease, border-color .14s ease,
+              color .14s ease, transform .08s ease;
+}
+.floor-pill:active { transform: scale(.95); }
 .floor-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 .map-select {
@@ -175,7 +180,12 @@ body {
   cursor: pointer;
   line-height: 1;
 }
+.tool {
+  transition: background-color .14s ease, border-color .14s ease,
+              color .14s ease, transform .08s ease, opacity .14s ease;
+}
 .tool:hover { border-color: #4a4f59; }
+.tool:active:not(:disabled) { transform: scale(.95); }
 .tool:disabled { opacity: .4; cursor: default; }
 .tool.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .tool-danger.active, .tool-danger:hover:not(:disabled) { border-color: var(--danger); }
@@ -193,6 +203,8 @@ body {
   cursor: pointer;
   padding: 0;
 }
+.swatch { transition: border-color .14s ease, box-shadow .14s ease, transform .08s ease; }
+.swatch:active { transform: scale(.92); }
 .swatch.active { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
 
 .color-chip {
@@ -233,8 +245,11 @@ body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding-bottom: 72px;   /* room so the last floor clears the hint bubble */
+  /* gently settle on a floor without trapping free scrolling */
+  scroll-snap-type: y proximity;
+  scroll-padding-top: 34px;   /* ≈ .floor-label height, so a jumped-to floor clears it */
 }
-.floor-section { position: relative; }
+.floor-section { position: relative; scroll-snap-align: start; }
 .floor-label {
   position: sticky;
   top: 0;
@@ -249,6 +264,7 @@ body {
   border-bottom: 1px solid var(--line);
 }
 .floor-count { color: var(--accent); font-weight: 700; }
+.floor-label { transition: color .18s ease; }
 .floor-section.active .floor-label { color: var(--text); }
 .floor-section.active .floor-label::after {
   content: "  ● in view";
@@ -261,6 +277,7 @@ body {
   width: 100%;
   margin: 0 auto;        /* center when fitted narrower than the viewport */
   background: #fff;       /* letterbox behind a map that isn't loaded yet */
+  will-change: transform; /* zoom animates transform (FLIP), not width */
 }
 .floor-scroll.zoomed { overflow-x: auto; }   /* pan horizontally when a floor is zoomed in */
 .map-img {
@@ -296,6 +313,21 @@ body {
   cursor: nwse-resize;
   touch-action: none;     /* dragging the handle resizes instead of scrolling */
 }
+
+/* A mark pops in when stamped (applied once, via the .placing class) */
+@keyframes mark-pop {
+  from { transform: scale(.55); opacity: .35; }
+  60%  { transform: scale(1.08); opacity: 1; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.mark.placing {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mark-pop .18s cubic-bezier(.22,.61,.36,1);
+}
+/* selection chrome fades in rather than hard-cutting */
+@keyframes sel-in { from { opacity: 0; } to { opacity: 1; } }
+.mark.selected .sel-box, .mark.selected .sel-handle { animation: sel-in .14s ease-out; }
 
 .hint {
   position: absolute;
@@ -350,4 +382,16 @@ body {
   .hint { font-size: 12px; }
   .install-btn { position: static; margin: 0; }
   .hub-top { flex-direction: column; gap: 8px; }
+}
+
+/* Respect the system "Reduce Motion" setting: everything still works, just without
+   the animation (the JS also skips the zoom transition + smooth scroll). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .floor-scroll { scroll-snap-type: none; }
 }
