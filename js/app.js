@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.12";
+  const APP_VERSION = "0.13";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -29,6 +29,7 @@
     offlineBadge: document.getElementById("offlineBadge"),
     toast: document.getElementById("toast"),
     appFoot: document.getElementById("appFoot"),
+    splash: document.getElementById("splash"),
     toolbar: document.getElementById("toolbar"),
     backBtn: document.getElementById("backBtn"),
     missionTitle: document.getElementById("missionTitle"),
@@ -163,10 +164,25 @@
     renderFloor(floor);
     updateSizeGroup();
     buzz(15);
+    spawnPulse(floor, x, y, state.color);
     // clear the flag so later re-renders don't replay the animation
     clearTimeout(placingTimer);
     placingTimer = setTimeout(() => { justPlacedId = null; }, 260);
     return m.id;
+  }
+
+  // Expanding ring at the stamp point. It's a throwaway node — removed when the
+  // animation ends so it can never accumulate in the overlay.
+  function spawnPulse(floor, x, y, color) {
+    if (reducedMotion()) return;
+    const c = document.createElementNS(SVGNS, "circle");
+    c.setAttribute("class", "stamp-pulse");
+    c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", 4);
+    c.setAttribute("stroke", color);
+    const kill = () => c.remove();
+    c.addEventListener("animationend", kill);
+    setTimeout(kill, 900);           // belt-and-braces if the event never fires
+    floor.svg.appendChild(c);
   }
   function deleteMarker(floor, id) {
     const i = floor.markers.findIndex((m) => m.id === id);
@@ -1009,23 +1025,53 @@
       const meta = document.createElement("div");
       meta.className = "m-meta";
 
+      // stats row: count chip + one dot per floor
+      const stats = document.createElement("div");
+      stats.className = "m-stats";
+      const chip = document.createElement("span");
+      chip.className = "m-chip";
+      const dots = document.createElement("span");
+      dots.className = "m-dots";
+      stats.append(chip, dots);
+
       card.append(num, name, meta);
-      if (available) card.addEventListener("click", () => openMission(mission));
+      if (available) {
+        // blueprint thumbnail behind the card
+        const thumb = document.createElement("div");
+        thumb.className = "m-thumb";
+        thumb.style.backgroundImage = "url('" + mission.maps[0].src + "')";
+        card.appendChild(thumb);
+        card.appendChild(stats);
+        card.addEventListener("click", () => openMission(mission));
+      }
       el.missionGrid.appendChild(card);
-      hubCards.push({ card, mission, available, metaEl: meta });
+      hubCards.push({ card, mission, available, metaEl: meta, chipEl: chip, dotsEl: dots });
     }
     refreshHubCounts();
   }
 
-  // Per-mission marked totals (summed from storage), shown in each card's meta line.
+  // Per-mission marked totals (summed from storage): meta line, count chip, floor dots.
   function refreshHubCounts() {
     for (const hc of hubCards) {
-      if (!hc.available) { hc.metaEl.textContent = "Coming soon"; continue; }
+      // locked cards already read "Coming soon" (or their name) + a lock glyph —
+      // don't repeat it in the meta line
+      if (!hc.available) { hc.metaEl.textContent = ""; continue; }
       const n = hc.mission.maps.length;
-      let marked = 0;
-      for (const map of hc.mission.maps) marked += stampCount(loadMarkers(map.id));
-      hc.metaEl.textContent = n + (n === 1 ? " map" : " maps") +
-        (marked ? " · " + marked + " marked" : "");
+      const perFloor = hc.mission.maps.map((map) => stampCount(loadMarkers(map.id)));
+      const marked = perFloor.reduce((a, b) => a + b, 0);
+
+      hc.metaEl.textContent = n + (n === 1 ? " map" : " maps");
+      hc.chipEl.textContent = marked ? marked + " marked" : "clear";
+      hc.chipEl.classList.toggle("empty", !marked);
+
+      // one dot per floor, filled when that floor has marks
+      hc.dotsEl.innerHTML = "";
+      for (const c of perFloor) {
+        const d = document.createElement("span");
+        d.className = "m-dot" + (c ? " on" : "");
+        d.title = c + " mark" + (c === 1 ? "" : "s");
+        hc.dotsEl.appendChild(d);
+      }
     }
   }
 
@@ -1046,6 +1092,25 @@
     el.hubEmpty.hidden = shown > 0;
   }
 
+  // Fade the splash out shortly after first paint (instantly if reduced motion).
+  function dismissSplash() {
+    if (!el.splash) return;
+    const hide = () => {
+      el.splash.classList.add("gone");
+      setTimeout(() => { el.splash.hidden = true; }, 500);
+    };
+    if (reducedMotion()) { el.splash.hidden = true; return; }
+    setTimeout(hide, 900);
+  }
+
+  // Restart a CSS entrance animation on an element that was just shown.
+  function playEnter(node) {
+    if (reducedMotion()) return;
+    node.classList.remove("entering");
+    void node.offsetWidth;          // reflow so the animation re-runs
+    node.classList.add("entering");
+  }
+
   function showHub() {
     teardownFloors();
     state.mission = null;
@@ -1053,6 +1118,7 @@
     el.toolbar.hidden = true;
     el.hub.hidden = false;
     refreshHubCounts();  // reflect edits made inside the mission we just left
+    playEnter(el.hub);
   }
 
   function openMission(mission) {
@@ -1062,6 +1128,8 @@
     el.hub.hidden = true;
     el.toolbar.hidden = false;
     el.stage.hidden = false;      // must be visible before we measure/observe
+    playEnter(el.stage);
+    playEnter(el.toolbar);
     pinRail();
     buildFloors(mission);
     buildFloorNav(mission);
@@ -1242,6 +1310,11 @@
           applyDims(map.width, map.height);
         }
         renderFloor(floor);
+        // one-shot "coming online" sweep across the freshly loaded floor
+        if (!reducedMotion()) {
+          wrap.classList.add("sweep");
+          setTimeout(() => wrap.classList.remove("sweep"), 900);
+        }
       };
       img.src = map.src;
 
@@ -1488,6 +1561,7 @@
     // Start on the hub so the user picks a mission first.
     showHub();
 
+    dismissSplash();
     checkSharedLink();   // opened from a shared plan link?
     registerServiceWorker();
   }
