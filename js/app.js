@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.11";
+  const APP_VERSION = "0.12";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -36,7 +36,15 @@
     scroller: document.getElementById("floorScroll"),
     stampXBtn: document.getElementById("stampXBtn"),
     stampWBtn: document.getElementById("stampWBtn"),
+    arrowBtn: document.getElementById("arrowBtn"),
+    penBtn: document.getElementById("penBtn"),
     eraserBtn: document.getElementById("eraserBtn"),
+    shareBtn: document.getElementById("shareBtn"),
+    shareImport: document.getElementById("shareImport"),
+    shareSummary: document.getElementById("shareSummary"),
+    shareMergeBtn: document.getElementById("shareMergeBtn"),
+    shareReplaceBtn: document.getElementById("shareReplaceBtn"),
+    shareCancelBtn: document.getElementById("shareCancelBtn"),
     swatches: document.getElementById("swatches"),
     colorInput: document.getElementById("colorInput"),
     undoBtn: document.getElementById("undoBtn"),
@@ -88,10 +96,23 @@
     try { localStorage.setItem(STORAGE_PREFIX + floor.map.id, JSON.stringify(floor.markers)); }
     catch (e) { /* storage full/blocked — non-fatal */ }
   }
+  // A mark is one of:
+  //   stamp: { id, type:"x"|"w", x, y, size, color }
+  //   arrow: { id, type:"arrow", x1,y1,x2,y2, size, color }
+  //   pen:   { id, type:"pen", pts:[[x,y],…], size, color }
   function validMarker(m) {
-    return m && typeof m.x === "number" && typeof m.y === "number" &&
-      typeof m.size === "number" && typeof m.color === "string" && typeof m.id === "string";
+    if (!m || typeof m.id !== "string" || typeof m.color !== "string" ||
+        typeof m.size !== "number") return false;
+    if (m.type === "arrow") {
+      return [m.x1, m.y1, m.x2, m.y2].every((n) => typeof n === "number");
+    }
+    if (m.type === "pen") {
+      return Array.isArray(m.pts) && m.pts.length > 1 &&
+        m.pts.every((p) => Array.isArray(p) && typeof p[0] === "number" && typeof p[1] === "number");
+    }
+    return typeof m.x === "number" && typeof m.y === "number";
   }
+  function isStamp(m) { return m.type !== "arrow" && m.type !== "pen"; }
 
   // =========================================================================
   // Undo (snapshot based, per floor)
@@ -233,20 +254,36 @@
     else floor.svg.appendChild(next);
   }
 
+  // Counts track cleared rooms (X/W stamps); arrows and pen strokes are annotations.
+  function stampCount(markers) { return markers.filter(isStamp).length; }
+
   function updateFloorCount(floor) {
-    if (floor.countEl) {
-      floor.countEl.textContent = floor.markers.length ? " · " + floor.markers.length : "";
-    }
+    if (!floor.countEl) return;
+    const n = stampCount(floor.markers);
+    const prev = floor.countEl.textContent;
+    floor.countEl.textContent = n ? " · " + n : "";
+    if (prev !== floor.countEl.textContent && n) bumpCount(floor.countEl);
+  }
+  // little scale bump when the number changes
+  function bumpCount(node) {
+    node.classList.remove("bump");
+    void node.offsetWidth;
+    node.classList.add("bump");
   }
 
   const W_SCALE = 0.82;  // render W a bit smaller so the X reads a little bigger
 
   function buildMarker(m, selected) {
     const g = document.createElementNS(SVGNS, "g");
-    // `.placing` plays the pop-in once, only for a mark that was just stamped
+    // `.placing` plays the entrance animation once, for a mark that was just created
     const placing = m.id === justPlacedId;
-    g.setAttribute("class", "mark" + (selected ? " selected" : "") + (placing ? " placing" : ""));
+    const kind = (m.type === "arrow" || m.type === "pen") ? m.type : "stamp";
+    g.setAttribute("class", "mark mark-" + kind +
+      (selected ? " selected" : "") + (placing ? " placing" : ""));
     g.dataset.id = m.id;
+
+    if (m.type === "arrow") { buildArrow(g, m, selected); return g; }
+    if (m.type === "pen") { buildPen(g, m, selected); return g; }
 
     const rs = m.size * (m.type === "w" ? W_SCALE : 1); // rendered size for this shape
     const h = rs / 2;
@@ -276,6 +313,109 @@
       g.appendChild(handle);
     }
     return g;
+  }
+
+  // ---- route arrow: shaft + head, with a dark halo and a fat invisible hit line ----
+  function strokeWidthOf(m) { return Math.max(4, m.size * 0.16); }
+
+  function buildArrow(g, m, selected) {
+    const sw = strokeWidthOf(m);
+    const dx = m.x2 - m.x1, dy = m.y2 - m.y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    const head = Math.max(sw * 3, 18);
+    // stop the shaft short so it doesn't poke through the head
+    const sx = m.x2 - ux * head * 0.85, sy = m.y2 - uy * head * 0.85;
+    const px = -uy, py = ux;                     // perpendicular
+    const headPts = [
+      [m.x2, m.y2],
+      [m.x2 - ux * head + px * head * 0.5, m.y2 - uy * head + py * head * 0.5],
+      [m.x2 - ux * head - px * head * 0.5, m.y2 - uy * head - py * head * 0.5],
+    ].map((p) => p[0] + "," + p[1]).join(" ");
+
+    const draw = (color, width, halo) => {
+      const grp = document.createElementNS(SVGNS, "g");
+      const shaft = makeLine(m.x1, m.y1, sx, sy);
+      shaft.setAttribute("stroke", color);
+      shaft.setAttribute("stroke-width", width);
+      shaft.setAttribute("stroke-linecap", "round");
+      shaft.setAttribute("fill", "none");
+      if (!halo) shaft.setAttribute("class", "arrow-shaft");
+      const hd = document.createElementNS(SVGNS, "polygon");
+      hd.setAttribute("points", headPts);
+      hd.setAttribute("fill", color);
+      if (halo) { hd.setAttribute("stroke", color); hd.setAttribute("stroke-width", 6); hd.setAttribute("stroke-linejoin", "round"); }
+      grp.append(shaft, hd);
+      return grp;
+    };
+    g.appendChild(draw("rgba(0,0,0,0.38)", sw + 6, true));
+    g.appendChild(draw(m.color, sw, false));
+    g.appendChild(hitLine([[m.x1, m.y1], [m.x2, m.y2]], sw));
+    if (selected) g.appendChild(selBox(bboxOf(m), m));
+  }
+
+  // ---- freehand pen: smoothed polyline ----
+  function buildPen(g, m, selected) {
+    const sw = strokeWidthOf(m);
+    const d = penPathData(m.pts);
+    const draw = (color, width, cls) => {
+      const p = document.createElementNS(SVGNS, "path");
+      p.setAttribute("d", d);
+      p.setAttribute("stroke", color);
+      p.setAttribute("stroke-width", width);
+      p.setAttribute("fill", "none");
+      p.setAttribute("stroke-linecap", "round");
+      p.setAttribute("stroke-linejoin", "round");
+      if (cls) p.setAttribute("class", cls);
+      return p;
+    };
+    g.appendChild(draw("rgba(0,0,0,0.38)", sw + 6));
+    g.appendChild(draw(m.color, sw, "pen-stroke"));
+    g.appendChild(hitLine(m.pts, sw));
+    if (selected) g.appendChild(selBox(bboxOf(m), m));
+  }
+
+  // Quadratic smoothing through midpoints — turns jittery samples into a clean stroke.
+  function penPathData(pts) {
+    if (pts.length < 2) return "";
+    let d = "M " + pts[0][0] + " " + pts[0][1];
+    if (pts.length === 2) return d + " L " + pts[1][0] + " " + pts[1][1];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = (pts[i][0] + pts[i + 1][0]) / 2;
+      const my = (pts[i][1] + pts[i + 1][1]) / 2;
+      d += " Q " + pts[i][0] + " " + pts[i][1] + " " + mx + " " + my;
+    }
+    const last = pts[pts.length - 1];
+    return d + " L " + last[0] + " " + last[1];
+  }
+
+  // A transparent fat stroke so thin lines are still easy to tap.
+  function hitLine(pts, sw) {
+    const p = document.createElementNS(SVGNS, "path");
+    p.setAttribute("d", penPathData(pts));
+    p.setAttribute("stroke", "transparent");
+    p.setAttribute("stroke-width", Math.max(sw + 26, 34));
+    p.setAttribute("fill", "none");
+    p.setAttribute("stroke-linecap", "round");
+    return p;
+  }
+
+  function bboxOf(m) {
+    const pts = m.type === "arrow" ? [[m.x1, m.y1], [m.x2, m.y2]] : m.pts;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [x, y] of pts) {
+      x0 = Math.min(x0, x); y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+    }
+    const pad = strokeWidthOf(m) + 8;
+    return { x: x0 - pad, y: y0 - pad, w: (x1 - x0) + pad * 2, h: (y1 - y0) + pad * 2 };
+  }
+  function selBox(b) {
+    const r = document.createElementNS(SVGNS, "rect");
+    r.setAttribute("class", "sel-box");
+    r.setAttribute("x", b.x); r.setAttribute("y", b.y);
+    r.setAttribute("width", b.w); r.setAttribute("height", b.h);
+    return r;
   }
   function lineGroup(m, h, sw, color) {
     const grp = document.createElementNS(SVGNS, "g");
@@ -375,6 +515,21 @@
     const floor = floorFromEvent(e);
     if (!floor) { press = null; return; }
 
+    // Arrow / Pen: a drag draws on the map instead of scrolling it.
+    if (state.tool === "arrow" || state.tool === "pen") {
+      e.preventDefault();
+      el.scroller.setPointerCapture && el.scroller.setPointerCapture(e.pointerId);
+      const start = toImage(floor, e.clientX, e.clientY);
+      press = {
+        kind: "draw", floor, tool: state.tool,
+        rect: floor.img.getBoundingClientRect(),
+        start, pts: [[start.x, start.y]],
+        lastX: e.clientX, lastY: e.clientY,
+        downTime: performance.now(), drew: false,
+      };
+      return;
+    }
+
     const handle = e.target.closest && e.target.closest("[data-role='resize']");
     const mark = e.target.closest && e.target.closest(".mark");
 
@@ -392,7 +547,7 @@
       const m = markerById(floor, mark.dataset.id);
       press = {
         kind: "move", floor, id: mark.dataset.id,
-        startImg: toImage(floor, e.clientX, e.clientY), startX: m.x, startY: m.y,
+        startImg: toImage(floor, e.clientX, e.clientY), startGeom: cloneGeom(m),
         downX: e.clientX, downY: e.clientY, downTime: performance.now(), moved: false, changed: false,
       };
       armLongPress(floor, mark.dataset.id);
@@ -423,6 +578,37 @@
     });
   }
 
+  // Snapshot a mark's geometry so a drag can translate from the original each frame.
+  function cloneGeom(m) {
+    if (m.type === "arrow") return { x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2 };
+    if (m.type === "pen") return { pts: m.pts.map((p) => [p[0], p[1]]) };
+    return { x: m.x, y: m.y };
+  }
+  // Move a mark of any type by (dx, dy), clamped so it stays on the map.
+  function translateMark(m, geom, dx, dy, floor) {
+    const W = floor.map.width, H = floor.map.height;
+    if (m.type === "arrow") {
+      const lo = Math.min(geom.x1, geom.x2), hi = Math.max(geom.x1, geom.x2);
+      const lo2 = Math.min(geom.y1, geom.y2), hi2 = Math.max(geom.y1, geom.y2);
+      dx = clamp(dx, -lo, W - hi); dy = clamp(dy, -lo2, H - hi2);
+      m.x1 = geom.x1 + dx; m.y1 = geom.y1 + dy;
+      m.x2 = geom.x2 + dx; m.y2 = geom.y2 + dy;
+      return;
+    }
+    if (m.type === "pen") {
+      let lo = Infinity, hi = -Infinity, lo2 = Infinity, hi2 = -Infinity;
+      for (const [x, y] of geom.pts) {
+        lo = Math.min(lo, x); hi = Math.max(hi, x);
+        lo2 = Math.min(lo2, y); hi2 = Math.max(hi2, y);
+      }
+      dx = clamp(dx, -lo, W - hi); dy = clamp(dy, -lo2, H - hi2);
+      m.pts = geom.pts.map((p) => [p[0] + dx, p[1] + dy]);
+      return;
+    }
+    m.x = clamp(geom.x + dx, 0, W);
+    m.y = clamp(geom.y + dy, 0, H);
+  }
+
   // Run any pending frame immediately (on pointerup) so the committed position is exact.
   function flushGesture() {
     if (!gestureRaf) return;
@@ -433,7 +619,12 @@
 
   function applyGestureFrame() {
     const p = press;
-    if (!p || (p.kind !== "resize" && p.kind !== "move")) return;
+    if (!p) return;
+
+    // Freehand / arrow drawing in progress
+    if (p.kind === "draw") { drawFrame(p); return; }
+    if (p.kind !== "resize" && p.kind !== "move") return;
+
     const m = markerById(p.floor, p.id);
     if (!m) return;
     // one measurement per frame, reused for this frame's math
@@ -444,14 +635,80 @@
       m.size = clamp(Math.max(Math.abs(img.x - m.x), Math.abs(img.y - m.y)) * 2, 16, 8000);
       el.sizeRange.value = Math.round(Math.min(220, m.size));
     } else {
-      m.x = clamp(p.startX + (img.x - p.startImg.x), 0, p.floor.map.width);
-      m.y = clamp(p.startY + (img.y - p.startImg.y), 0, p.floor.map.height);
+      translateMark(m, p.startGeom, img.x - p.startImg.x, img.y - p.startImg.y, p.floor);
     }
     renderMarkerNode(p.floor, m);   // O(1) instead of rebuilding every marker
   }
 
+  // Live preview while drawing an arrow or a pen stroke.
+  const PEN_MIN_STEP = 6;   // image px between recorded points (keeps strokes small + smooth)
+
+  function drawFrame(p) {
+    const img = toImageRect(p.floor, p.rect, p.lastX, p.lastY);
+    const x = clamp(img.x, 0, p.floor.map.width);
+    const y = clamp(img.y, 0, p.floor.map.height);
+
+    if (p.tool === "arrow") {
+      p.end = { x, y };
+      if (Math.hypot(x - p.start.x, y - p.start.y) > 6) p.drew = true;
+    } else {
+      const last = p.pts[p.pts.length - 1];
+      if (Math.hypot(x - last[0], y - last[1]) >= PEN_MIN_STEP) {
+        p.pts.push([x, y]);
+        p.drew = true;
+      }
+    }
+    renderDraftMark(p);
+  }
+
+  // The in-progress shape is rendered as a normal mark node with a temp id, so it
+  // looks exactly like the finished result while you draw.
+  function draftMark(p) {
+    const base = { id: "__draft", size: state.stampSize, color: state.color };
+    if (p.tool === "arrow") {
+      const e2 = p.end || p.start;
+      return Object.assign(base, { type: "arrow", x1: p.start.x, y1: p.start.y, x2: e2.x, y2: e2.y });
+    }
+    return Object.assign(base, { type: "pen", pts: p.pts });
+  }
+  function renderDraftMark(p) {
+    if (!p.drew) return;
+    const node = buildMarker(draftMark(p), false);
+    node.classList.add("draft");
+    const old = p.floor.svg.querySelector('[data-id="__draft"]');
+    if (old) p.floor.svg.replaceChild(node, old);
+    else p.floor.svg.appendChild(node);
+  }
+  function clearDraft(floor) {
+    const old = floor.svg.querySelector('[data-id="__draft"]');
+    if (old) old.remove();
+  }
+
+  // Commit the drawn shape into the floor's marks (undoable, persisted).
+  function commitDraw(p) {
+    clearDraft(p.floor);
+    if (!p.drew) return;
+    const m = draftMark(p);
+    m.id = uid();
+    if (m.type === "pen") m.pts = m.pts.map((pt) => [Math.round(pt[0]), Math.round(pt[1])]);
+    pushUndo(p.floor);
+    p.floor.markers.push(m);
+    justPlacedId = m.id;
+    saveFloor(p.floor);
+    renderFloor(p.floor);
+    buzz(12);
+    clearTimeout(placingTimer);
+    placingTimer = setTimeout(() => { justPlacedId = null; }, 700);
+  }
+
   function onPointerMove(e) {
     if (!press) return;
+    if (press.kind === "draw") {
+      e.preventDefault();
+      press.lastX = e.clientX; press.lastY = e.clientY;
+      scheduleGestureFrame();
+      return;
+    }
     if (press.kind === "resize") {
       e.preventDefault();
       clearLongPress();          // a drag is not a long-press
@@ -480,13 +737,14 @@
   function onPointerUp(e) {
     if (!press) return;
     clearLongPress();
-    if (press.kind === "resize" || press.kind === "move") {
+    if (press.kind === "draw" || press.kind === "resize" || press.kind === "move") {
       el.scroller.releasePointerCapture && el.scroller.releasePointerCapture(e.pointerId);
       flushGesture();   // apply any frame still pending so the final position is exact
     }
     const p = press;
     press = null;
 
+    if (p.kind === "draw") { commitDraw(p); return; }
     if (p.longPressed) return;                 // already handled by the long-press delete
     if (p.kind === "resize") { commitResize(p); return; }
     if (p.kind === "move" && p.moved) { commitDrag(p); return; }
@@ -528,8 +786,9 @@
 
   function onPointerCancel() {
     clearLongPress();
-    if (press && (press.kind === "resize" || press.kind === "move")) flushGesture();
-    if (press && press.kind === "resize") commitResize(press);
+    if (press && (press.kind === "draw" || press.kind === "resize" || press.kind === "move")) flushGesture();
+    if (press && press.kind === "draw") commitDraw(press);
+    else if (press && press.kind === "resize") commitResize(press);
     else if (press && press.kind === "move" && press.moved) commitDrag(press);
     press = null;
   }
@@ -651,26 +910,35 @@
     } catch (e) {}
   }
 
+  const HINTS = {
+    stamp: "Tap to stamp · scroll for floors · double-tap to zoom.",
+    arrow: "Drag to draw a route arrow. (Scrolling is off while Arrow is on.)",
+    pen: "Drag to draw freehand. (Scrolling is off while Pen is on.)",
+    eraser: "Eraser: tap a mark to remove it.",
+  };
+
   function setTool(tool) {
     state.tool = tool;
-    if (tool === "eraser") deselect();
+    if (tool !== "stamp") deselect();
+    // While a draw tool is active, a one-finger drag must draw, not scroll the floors.
+    el.scroller.classList.toggle("drawing", tool === "arrow" || tool === "pen");
     updateToolButtons();
-    el.hint.textContent = tool === "eraser"
-      ? "Eraser: tap a mark to remove it."
-      : "Tap to stamp · scroll for floors · double-tap to zoom.";
+    updateSizeGroup();
+    el.hint.textContent = HINTS[tool] || HINTS.stamp;
   }
 
-  // Highlight the active tool/shape: X or W while stamping, else Eraser.
+  // Highlight the active tool: X/W while stamping, else Arrow, Pen, or Eraser.
   function updateToolButtons() {
     const stamping = state.tool === "stamp";
-    const xActive = stamping && state.stampType === "x";
-    const wActive = stamping && state.stampType === "w";
-    el.stampXBtn.classList.toggle("active", xActive);
-    el.stampWBtn.classList.toggle("active", wActive);
-    el.eraserBtn.classList.toggle("active", state.tool === "eraser");
-    el.stampXBtn.setAttribute("aria-pressed", String(xActive));
-    el.stampWBtn.setAttribute("aria-pressed", String(wActive));
-    el.eraserBtn.setAttribute("aria-pressed", String(state.tool === "eraser"));
+    const set = (btn, on) => {
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", String(on));
+    };
+    set(el.stampXBtn, stamping && state.stampType === "x");
+    set(el.stampWBtn, stamping && state.stampType === "w");
+    set(el.arrowBtn, state.tool === "arrow");
+    set(el.penBtn, state.tool === "pen");
+    set(el.eraserBtn, state.tool === "eraser");
   }
 
   function updateButtons() {
@@ -685,6 +953,10 @@
     if (m) {
       el.sizeGroup.hidden = false;
       el.sizeRange.value = Math.round(clamp(m.size, 16, 220));
+    } else if (state.tool === "arrow" || state.tool === "pen") {
+      // no selection, but the slider sets the thickness of what you're about to draw
+      el.sizeGroup.hidden = false;
+      el.sizeRange.value = Math.round(clamp(state.stampSize, 16, 220));
     } else {
       el.sizeGroup.hidden = true;
     }
@@ -751,7 +1023,7 @@
       if (!hc.available) { hc.metaEl.textContent = "Coming soon"; continue; }
       const n = hc.mission.maps.length;
       let marked = 0;
-      for (const map of hc.mission.maps) marked += loadMarkers(map.id).length;
+      for (const map of hc.mission.maps) marked += stampCount(loadMarkers(map.id));
       hc.metaEl.textContent = n + (n === 1 ? " map" : " maps") +
         (marked ? " · " + marked + " marked" : "");
     }
@@ -995,6 +1267,150 @@
   }
 
   // =========================================================================
+  // Share a marked-up mission as a link (state lives in the URL hash — no server)
+  // =========================================================================
+  function b64urlEncode(bytes) {
+    let s = "";
+    for (const b of bytes) s += String.fromCharCode(b);
+    return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function b64urlDecode(str) {
+    const s = str.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(s + "=".repeat((4 - (s.length % 4)) % 4));
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  async function deflate(bytes) {
+    if (typeof CompressionStream === "undefined") return null;
+    const cs = new CompressionStream("deflate-raw");
+    const buf = await new Response(new Blob([bytes]).stream().pipeThrough(cs)).arrayBuffer();
+    return new Uint8Array(buf);
+  }
+  async function inflate(bytes) {
+    if (typeof DecompressionStream === "undefined") return null;
+    const ds = new DecompressionStream("deflate-raw");
+    const buf = await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+    return new Uint8Array(buf);
+  }
+
+  // Round coordinates before sharing — full float precision just bloats the link.
+  function compactMark(m) {
+    const r = (n) => Math.round(n);
+    const o = { i: m.id.slice(-6), t: m.type || "x", c: m.color, s: r(m.size) };
+    if (m.type === "arrow") { o.a = [r(m.x1), r(m.y1), r(m.x2), r(m.y2)]; }
+    else if (m.type === "pen") { o.p = m.pts.map((p) => [r(p[0]), r(p[1])]); }
+    else { o.x = r(m.x); o.y = r(m.y); }
+    return o;
+  }
+  function expandMark(o) {
+    const m = { id: uid(), type: o.t || "x", color: o.c || "#e02424", size: Number(o.s) || 64 };
+    if (m.type === "arrow" && Array.isArray(o.a)) {
+      m.x1 = o.a[0]; m.y1 = o.a[1]; m.x2 = o.a[2]; m.y2 = o.a[3];
+    } else if (m.type === "pen" && Array.isArray(o.p)) {
+      m.pts = o.p.map((p) => [p[0], p[1]]);
+    } else {
+      m.x = o.x; m.y = o.y;
+    }
+    return validMarker(m) ? m : null;
+  }
+
+  async function buildShareLink() {
+    if (!state.mission) return null;
+    const payload = { v: 1, m: state.mission.number, f: {} };
+    let total = 0;
+    for (const f of state.floors) {
+      if (!f.markers.length) continue;
+      payload.f[f.map.id] = f.markers.map(compactMark);
+      total += f.markers.length;
+    }
+    if (!total) return null;
+    const json = new TextEncoder().encode(JSON.stringify(payload));
+    const packed = await deflate(json);
+    const data = packed ? "z" + b64urlEncode(packed) : "j" + b64urlEncode(json);
+    const base = location.href.split("#")[0];
+    return { url: base + "#s=" + data, total };
+  }
+
+  async function shareCurrentMission() {
+    const made = await buildShareLink().catch(() => null);
+    if (!made) { toast("Nothing to share yet — add some marks first."); return; }
+    if (made.url.length > 30000) { toast("Too many marks to fit in a link."); return; }
+    const title = state.mission.name + " — RoN Maps";
+    try {
+      if (navigator.share) { await navigator.share({ title, url: made.url }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    try {
+      await navigator.clipboard.writeText(made.url);
+      toast("Link copied — " + made.total + " mark" + (made.total === 1 ? "" : "s"));
+    } catch (e) {
+      prompt("Copy this link:", made.url);
+    }
+  }
+
+  // ---- opening a shared link ----
+  let pendingShare = null;
+
+  async function decodeShare(raw) {
+    const kind = raw[0], body = raw.slice(1);
+    let json;
+    if (kind === "z") {
+      const out = await inflate(b64urlDecode(body));
+      if (!out) return null;
+      json = new TextDecoder().decode(out);
+    } else if (kind === "j") {
+      json = new TextDecoder().decode(b64urlDecode(body));
+    } else return null;
+    const data = JSON.parse(json);
+    return (data && data.v === 1 && data.f) ? data : null;
+  }
+
+  async function checkSharedLink() {
+    const match = /[#&]s=([A-Za-z0-9\-_]+)/.exec(location.hash || "");
+    if (!match) return;
+    let data = null;
+    try { data = await decodeShare(match[1]); } catch (e) { data = null; }
+    history.replaceState(null, "", location.pathname + location.search);
+    if (!data) { toast("That shared link couldn't be read."); return; }
+
+    const mission = MISSIONS.find((mi) => mi.number === data.m);
+    if (!mission || !mission.maps.length) { toast("That plan is for a mission you don't have maps for."); return; }
+
+    let count = 0;
+    for (const k of Object.keys(data.f)) count += (data.f[k] || []).length;
+    pendingShare = { mission, data, count };
+    el.shareSummary.textContent =
+      count + " mark" + (count === 1 ? "" : "s") + " for " + mission.name +
+      ". Add them to your own marks, or replace what you have for this mission?";
+    el.shareImport.hidden = false;
+  }
+
+  function applyShare(mode) {
+    const ps = pendingShare;
+    pendingShare = null;
+    el.shareImport.hidden = true;
+    if (!ps) return;
+    let added = 0;
+    for (const map of ps.mission.maps) {
+      const incoming = (ps.data.f[map.id] || []).map(expandMark).filter(Boolean);
+      if (mode === "replace") {
+        if (!incoming.length && !(map.id in ps.data.f)) continue;
+        saveMarkersFor(map.id, incoming);
+        added += incoming.length;
+      } else if (incoming.length) {
+        saveMarkersFor(map.id, loadMarkers(map.id).concat(incoming));
+        added += incoming.length;
+      }
+    }
+    refreshHubCounts();
+    openMission(ps.mission);
+    toast(added + " mark" + (added === 1 ? "" : "s") + " loaded");
+  }
+  function saveMarkersFor(mapId, markers) {
+    try { localStorage.setItem(STORAGE_PREFIX + mapId, JSON.stringify(markers)); } catch (e) {}
+  }
+
+  // =========================================================================
   // Init
   // =========================================================================
   function init() {
@@ -1008,7 +1424,13 @@
     el.backBtn.addEventListener("click", showHub);
     el.stampXBtn.addEventListener("click", () => setStampType("x"));
     el.stampWBtn.addEventListener("click", () => setStampType("w"));
+    el.arrowBtn.addEventListener("click", () => setTool("arrow"));
+    el.penBtn.addEventListener("click", () => setTool("pen"));
     el.eraserBtn.addEventListener("click", () => setTool("eraser"));
+    el.shareBtn.addEventListener("click", shareCurrentMission);
+    el.shareMergeBtn.addEventListener("click", () => applyShare("merge"));
+    el.shareReplaceBtn.addEventListener("click", () => applyShare("replace"));
+    el.shareCancelBtn.addEventListener("click", () => { pendingShare = null; el.shareImport.hidden = true; });
     el.undoBtn.addEventListener("click", undo);
     el.redoBtn.addEventListener("click", redo);
     el.resetBtn.addEventListener("click", reset);
@@ -1042,6 +1464,8 @@
       else if (e.key === "e") setTool("eraser");
       else if (e.key === "x" || e.key === "s") setStampType("x");
       else if (e.key === "w") setStampType("w");
+      else if (e.key === "a") setTool("arrow");
+      else if (e.key === "p") setTool("pen");
       else if ((e.key === "Delete" || e.key === "Backspace") && state.selectedId) {
         e.preventDefault();
         deleteMarker(selectedFloor(), state.selectedId);
@@ -1064,6 +1488,7 @@
     // Start on the hub so the user picks a mission first.
     showHub();
 
+    checkSharedLink();   // opened from a shared plan link?
     registerServiceWorker();
   }
 

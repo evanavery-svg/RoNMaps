@@ -263,7 +263,9 @@ body {
   backdrop-filter: blur(6px);
   border-bottom: 1px solid var(--line);
 }
-.floor-count { color: var(--accent); font-weight: 700; }
+.floor-count { color: var(--accent); font-weight: 700; display: inline-block; }
+@keyframes count-bump { 0%{transform:scale(1)} 40%{transform:scale(1.35)} 100%{transform:scale(1)} }
+.floor-count.bump { animation: count-bump .28s cubic-bezier(.22,.61,.36,1); }
 .floor-label { transition: color .18s ease; }
 .floor-section.active .floor-label { color: var(--text); }
 .floor-section.active .floor-label::after {
@@ -280,6 +282,9 @@ body {
   will-change: transform; /* zoom animates transform (FLIP), not width */
 }
 .floor-scroll.zoomed { overflow-x: auto; }   /* pan horizontally when a floor is zoomed in */
+/* While Arrow/Pen is active a one-finger drag must draw, not scroll */
+.floor-scroll.drawing .floor-section { touch-action: none; }
+.floor-scroll.drawing { cursor: crosshair; }
 .map-img {
   display: block;
   width: 100%;
@@ -320,11 +325,27 @@ body {
   60%  { transform: scale(1.08); opacity: 1; }
   to   { transform: scale(1); opacity: 1; }
 }
-.mark.placing {
+.mark-stamp.placing {
   transform-box: fill-box;
   transform-origin: center;
   animation: mark-pop .18s cubic-bezier(.22,.61,.36,1);
 }
+
+/* Arrows and pen strokes draw themselves on when placed */
+@keyframes draw-on { from { stroke-dashoffset: 6000; } to { stroke-dashoffset: 0; } }
+.mark-pen.placing .pen-stroke,
+.mark-arrow.placing .arrow-shaft {
+  stroke-dasharray: 6000;
+  animation: draw-on .45s cubic-bezier(.22,.61,.36,1) forwards;
+}
+@keyframes head-in { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
+.mark-arrow.placing polygon {
+  transform-box: fill-box; transform-origin: center;
+  animation: head-in .2s .28s backwards cubic-bezier(.22,.61,.36,1);
+}
+
+/* the shape being drawn right now */
+.mark.draft { opacity: .85; pointer-events: none; }
 /* selection chrome fades in rather than hard-cutting */
 @keyframes sel-in { from { opacity: 0; } to { opacity: 1; } }
 .mark.selected .sel-box, .mark.selected .sel-handle { animation: sel-in .14s ease-out; }
@@ -342,6 +363,52 @@ body {
   max-width: 92%;
   text-align: center;
 }
+
+/* ---------------- Share-import dialog ---------------- */
+/* NOTE: don't call this `.overlay` — that class is the per-map SVG marker layer,
+   which sets pointer-events:none and would make this dialog unclickable. */
+.modal {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(3px);
+  animation: fade-in .18s ease-out;
+  padding: 20px;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(14px) scale(.97); } to { opacity: 1; transform: none; } }
+.sheet {
+  width: min(460px, 100%);
+  background: var(--toolbar); color: var(--text);
+  border: 1px solid var(--line); border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.55);
+  animation: sheet-in .22s cubic-bezier(.22,.61,.36,1);
+}
+.sheet-title { margin: 0 0 8px; font-size: 20px; }
+.sheet-body { margin: 0 0 18px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.sheet-actions { display: flex; flex-direction: column; gap: 8px; }
+.sheet-actions .tool { justify-content: center; }
+
+/* ---------------- Entrance animations ---------------- */
+@keyframes card-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.mission-card { animation: card-in .32s cubic-bezier(.22,.61,.36,1) backwards; }
+/* a gentle stagger across the grid */
+.mission-card:nth-child(1){animation-delay:.01s}   .mission-card:nth-child(2){animation-delay:.02s}
+.mission-card:nth-child(3){animation-delay:.03s}   .mission-card:nth-child(4){animation-delay:.04s}
+.mission-card:nth-child(5){animation-delay:.05s}   .mission-card:nth-child(6){animation-delay:.06s}
+.mission-card:nth-child(7){animation-delay:.07s}   .mission-card:nth-child(8){animation-delay:.08s}
+.mission-card:nth-child(9){animation-delay:.09s}   .mission-card:nth-child(10){animation-delay:.10s}
+.mission-card:nth-child(n+11){animation-delay:.12s}
+
+@keyframes floor-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.floor-section { animation: floor-in .3s cubic-bezier(.22,.61,.36,1) backwards; }
+.floor-section:nth-child(2){animation-delay:.05s}
+.floor-section:nth-child(3){animation-delay:.10s}
+.floor-section:nth-child(n+4){animation-delay:.14s}
+
+/* active tool gets a soft glow so the current mode is obvious at a glance */
+.tool.active { box-shadow: 0 0 0 1px rgba(224,36,36,.5), 0 4px 14px rgba(224,36,36,.28); }
 
 /* ---------------- PWA polish: offline badge + toast ---------------- */
 .offline-badge {

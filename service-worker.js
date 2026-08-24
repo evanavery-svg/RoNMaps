@@ -6,7 +6,7 @@
  *   - Maps + icons: CACHE-FIRST (large, rarely change), with runtime caching.
  *
  * Bump CACHE_VERSION whenever you add/replace maps or want to force-clear old caches. */
-const CACHE_VERSION = "ronmaps-v14";
+const CACHE_VERSION = "ronmaps-v15";
 
 const CACHE_ASSETS = [
   "./",

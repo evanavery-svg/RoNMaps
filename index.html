@@ -40,6 +40,19 @@
   <div class="offline-badge" id="offlineBadge" hidden>● Offline</div>
   <div class="toast" id="toast" hidden></div>
 
+  <!-- Shown when the app is opened from a shared plan link -->
+  <div class="modal" id="shareImport" hidden>
+    <div class="sheet">
+      <h2 class="sheet-title">Shared plan</h2>
+      <p class="sheet-body" id="shareSummary"></p>
+      <div class="sheet-actions">
+        <button id="shareMergeBtn" class="tool">Add to my marks</button>
+        <button id="shareReplaceBtn" class="tool tool-danger">Replace my marks</button>
+        <button id="shareCancelBtn" class="tool">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===================== MAP VIEW ===================== -->
   <header class="toolbar" id="toolbar" hidden>
     <div class="tb-group">
@@ -55,6 +68,12 @@
       </button>
       <button id="stampWBtn" class="tool" aria-pressed="false" title="Stamp W (tap the map)">
         <span class="tool-x">W</span><span class="tool-txt">W</span>
+      </button>
+      <button id="arrowBtn" class="tool" aria-pressed="false" title="Arrow — drag to draw a route">
+        <span class="tool-x">↗</span><span class="tool-txt">Arrow</span>
+      </button>
+      <button id="penBtn" class="tool" aria-pressed="false" title="Pen — drag to draw freehand">
+        <span class="tool-x">✎</span><span class="tool-txt">Pen</span>
       </button>
       <button id="eraserBtn" class="tool" aria-pressed="false" title="Eraser (tap a mark to remove)">
         <span class="tool-ico">▭</span><span class="tool-txt">Eraser</span>
@@ -73,6 +92,10 @@
       <button id="undoBtn" class="tool" title="Undo">↶<span class="tool-txt">Undo</span></button>
       <button id="redoBtn" class="tool" title="Redo">↷<span class="tool-txt">Redo</span></button>
       <button id="resetBtn" class="tool tool-danger" title="Clear all marks on every floor">⟲<span class="tool-txt">Reset</span></button>
+    </div>
+
+    <div class="tb-group">
+      <button id="shareBtn" class="tool" title="Copy a link to this marked-up mission">⇪<span class="tool-txt">Share</span></button>
     </div>
 
     <div class="tb-group tb-size" id="sizeGroup" hidden>
