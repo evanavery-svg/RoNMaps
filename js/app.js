@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.13";
+  const APP_VERSION = "0.14";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -39,6 +39,9 @@
     stampWBtn: document.getElementById("stampWBtn"),
     arrowBtn: document.getElementById("arrowBtn"),
     penBtn: document.getElementById("penBtn"),
+    layerStampBtn: document.getElementById("layerStampBtn"),
+    layerArrowBtn: document.getElementById("layerArrowBtn"),
+    layerPenBtn: document.getElementById("layerPenBtn"),
     eraserBtn: document.getElementById("eraserBtn"),
     shareBtn: document.getElementById("shareBtn"),
     shareImport: document.getElementById("shareImport"),
@@ -68,7 +71,13 @@
     stampType: "x",      // "x" | "w" — which shape the stamp places
     color: "#e02424",
     stampSize: 64,       // default new-marker size, in image px
+    // which kinds of mark are visible; a hidden layer isn't rendered (so it also
+    // can't be tapped or erased). Purely a view preference — nothing is deleted.
+    layers: { stamp: true, arrow: true, pen: true },
   };
+  // which layer a mark belongs to
+  function layerOf(m) { return (m.type === "arrow" || m.type === "pen") ? m.type : "stamp"; }
+  function layerVisible(m) { return state.layers[layerOf(m)] !== false; }
 
   // ---- small helpers ----
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -255,7 +264,10 @@
     const svg = floor.svg;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     const selId = (indexOf(floor) === state.selectedIndex) ? state.selectedId : null;
-    for (const m of floor.markers) svg.appendChild(buildMarker(m, m.id === selId));
+    for (const m of floor.markers) {
+      if (!layerVisible(m)) continue;      // hidden layer — skip rendering entirely
+      svg.appendChild(buildMarker(m, m.id === selId));
+    }
     updateFloorCount(floor);
     updateButtons();
   }
@@ -263,9 +275,10 @@
   // Re-render ONE marker in place. Used during drag/resize so a gesture does O(1) DOM work
   // instead of rebuilding every marker on the floor each frame.
   function renderMarkerNode(floor, m) {
+    const old = floor.svg.querySelector('[data-id="' + m.id + '"]');
+    if (!layerVisible(m)) { if (old) old.remove(); return; }
     const selId = (indexOf(floor) === state.selectedIndex) ? state.selectedId : null;
     const next = buildMarker(m, m.id === selId);
-    const old = floor.svg.querySelector('[data-id="' + m.id + '"]');
     if (old) floor.svg.replaceChild(next, old);
     else floor.svg.appendChild(next);
   }
@@ -894,6 +907,7 @@
   // tap), also convert it — so you can switch an existing mark's shape just as easily.
   function setStampType(type) {
     state.stampType = type;
+    ensureLayerVisible("stamp");
     if (state.tool !== "stamp") setTool("stamp");
     const m = selectedMarker();
     if (m && (m.type || "x") !== type) {
@@ -913,6 +927,7 @@
       localStorage.setItem(STORAGE_PREFIX + "color", state.color);
       localStorage.setItem(STORAGE_PREFIX + "size", String(state.stampSize));
       localStorage.setItem(STORAGE_PREFIX + "type", state.stampType);
+      localStorage.setItem(STORAGE_PREFIX + "layers", JSON.stringify(state.layers));
     } catch (e) {}
   }
   function loadPrefs() {
@@ -923,6 +938,12 @@
       if (s >= 16 && s <= 220) state.stampSize = s;
       const t = localStorage.getItem(STORAGE_PREFIX + "type");
       if (t === "x" || t === "w") state.stampType = t;
+      const L = JSON.parse(localStorage.getItem(STORAGE_PREFIX + "layers") || "null");
+      if (L && typeof L === "object") {
+        for (const k of ["stamp", "arrow", "pen"]) {
+          if (typeof L[k] === "boolean") state.layers[k] = L[k];
+        }
+      }
     } catch (e) {}
   }
 
@@ -933,8 +954,37 @@
     eraser: "Eraser: tap a mark to remove it.",
   };
 
+  // Show/hide a whole class of marks. Nothing is deleted — they're just not drawn.
+  function toggleLayer(layer) { setLayer(layer, !state.layers[layer]); }
+
+  function setLayer(layer, on) {
+    if (state.layers[layer] === on) return;
+    state.layers[layer] = on;
+    // don't leave a now-invisible mark selected
+    const sel = selectedMarker();
+    if (!on && sel && layerOf(sel) === layer) clearSelection();
+    updateLayerButtons();
+    updateSizeGroup();
+    for (const f of state.floors) renderFloor(f);
+    savePrefs();
+  }
+
+  // Using a tool implies wanting to see what it draws.
+  function ensureLayerVisible(layer) { setLayer(layer, true); }
+
+  function updateLayerButtons() {
+    const set = (btn, on) => {
+      btn.classList.toggle("off", !on);
+      btn.setAttribute("aria-pressed", String(on));
+    };
+    set(el.layerStampBtn, state.layers.stamp !== false);
+    set(el.layerArrowBtn, state.layers.arrow !== false);
+    set(el.layerPenBtn, state.layers.pen !== false);
+  }
+
   function setTool(tool) {
     state.tool = tool;
+    if (tool === "arrow" || tool === "pen") ensureLayerVisible(tool);
     if (tool !== "stamp") deselect();
     // While a draw tool is active, a one-finger drag must draw, not scroll the floors.
     el.scroller.classList.toggle("drawing", tool === "arrow" || tool === "pen");
@@ -1491,6 +1541,7 @@
     loadPrefs();
     setColor(state.color);
     el.sizeRange.value = Math.round(clamp(state.stampSize, 16, 220));
+    updateLayerButtons();
     buildHub();
     el.appFoot.textContent = "© Avery LLC · v" + APP_VERSION;
 
@@ -1500,6 +1551,9 @@
     el.arrowBtn.addEventListener("click", () => setTool("arrow"));
     el.penBtn.addEventListener("click", () => setTool("pen"));
     el.eraserBtn.addEventListener("click", () => setTool("eraser"));
+    el.layerStampBtn.addEventListener("click", () => toggleLayer("stamp"));
+    el.layerArrowBtn.addEventListener("click", () => toggleLayer("arrow"));
+    el.layerPenBtn.addEventListener("click", () => toggleLayer("pen"));
     el.shareBtn.addEventListener("click", shareCurrentMission);
     el.shareMergeBtn.addEventListener("click", () => applyShare("merge"));
     el.shareReplaceBtn.addEventListener("click", () => applyShare("replace"));
@@ -1539,6 +1593,9 @@
       else if (e.key === "w") setStampType("w");
       else if (e.key === "a") setTool("arrow");
       else if (e.key === "p") setTool("pen");
+      else if (e.key === "1") toggleLayer("stamp");
+      else if (e.key === "2") toggleLayer("arrow");
+      else if (e.key === "3") toggleLayer("pen");
       else if ((e.key === "Delete" || e.key === "Backspace") && state.selectedId) {
         e.preventDefault();
         deleteMarker(selectedFloor(), state.selectedId);

@@ -218,6 +218,22 @@ body::before {
 .tb-group + .tb-group { padding-top: 8px; border-top: 1px solid var(--line); }
 .tb-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 
+/* Layer visibility toggles — "on" is the normal look, "off" is dimmed + struck through */
+.tb-layers { gap: 5px; }
+.layer-btn { min-height: 34px; font-size: 13px; justify-content: flex-start; padding-left: 10px; }
+.layer-btn .tool-x { color: var(--ok); }
+.layer-btn.off {
+  opacity: .45;
+  border-style: dashed;
+  background: transparent;
+}
+.layer-btn.off .tool-x { color: var(--muted); }
+.layer-btn.off .tool-txt { text-decoration: line-through; }
+/* a slash across the icon when the layer is hidden */
+.layer-btn.off .tool-x::after {
+  content: "/"; position: absolute; left: 10px; color: var(--muted); font-weight: 700;
+}
+
 /* Floor quick-jump pills */
 .tb-floornav { display: flex; flex-direction: column; gap: 6px; }
 .floor-pill {
