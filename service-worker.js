@@ -6,7 +6,7 @@
  *   - Maps + icons: CACHE-FIRST (large, rarely change), with runtime caching.
  *
  * Bump CACHE_VERSION whenever you add/replace maps or want to force-clear old caches. */
-const CACHE_VERSION = "ronmaps-v19";
+const CACHE_VERSION = "ronmaps-v20";
 
 const CACHE_ASSETS = [
   "./",
@@ -29,6 +29,11 @@ const CACHE_ASSETS = [
   "./assets/maps/SinsOfTheFatherFloor1.png",
   "./assets/maps/SinsOfTheFatherFloor2.png",
   "./assets/maps/SinsOfTheFatherRoof.png",
+  "./assets/maps/NeonTombGround.png",
+  "./assets/maps/NeonTombFloor1.png",
+  "./assets/maps/RelapseGround.png",
+  "./assets/maps/RelapseFloor1.png",
+  "./assets/maps/RelapseFloor2.png",
 ];
 
 // App-shell requests get the network-first treatment.

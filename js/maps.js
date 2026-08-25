@@ -67,6 +67,25 @@ const MISSION_DATA = {
     ],
   },
 
+  // Mission 14 — Neon Tomb.
+  14: {
+    name: "Neon Tomb",
+    maps: [
+      { id: "neon-tomb-ground",  name: "Ground",  src: "assets/maps/NeonTombGround.png", width: 1080, height: 1920 },
+      { id: "neon-tomb-floor-1", name: "Floor 1", src: "assets/maps/NeonTombFloor1.png", width: 1080, height: 1920 },
+    ],
+  },
+
+  // Mission 17 — Relapse. (Landscape blueprints, unlike most of the others.)
+  17: {
+    name: "Relapse",
+    maps: [
+      { id: "relapse-ground",  name: "Ground",  src: "assets/maps/RelapseGround.png", width: 1920, height: 1080 },
+      { id: "relapse-floor-1", name: "Floor 1", src: "assets/maps/RelapseFloor1.png", width: 1920, height: 1080 },
+      { id: "relapse-floor-2", name: "Floor 2", src: "assets/maps/RelapseFloor2.png", width: 1920, height: 1080 },
+    ],
+  },
+
   // Add more missions here as you upload them, e.g.:
   // 1:  { name: "…", maps: [ … ] },
   //
