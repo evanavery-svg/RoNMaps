@@ -76,6 +76,15 @@ const MISSION_DATA = {
     ],
   },
 
+  // Mission 15 — Buy Cheap, Buy Twice.
+  15: {
+    name: "Buy Cheap, Buy Twice",
+    maps: [
+      { id: "buy-cheap-buy-twice-ground",  name: "Ground",  src: "assets/maps/BuyCheapBuyTwiceGround.png", width: 1920, height: 1080 },
+      { id: "buy-cheap-buy-twice-floor-1", name: "Floor 1", src: "assets/maps/BuyCheapBuyTwiceFloor1.png", width: 1920, height: 1080 },
+    ],
+  },
+
   // Mission 17 — Relapse. (Landscape blueprints, unlike most of the others.)
   17: {
     name: "Relapse",

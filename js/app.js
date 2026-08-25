@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.17";
+  const APP_VERSION = "0.18";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
