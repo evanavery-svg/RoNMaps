@@ -114,6 +114,26 @@ const MISSION_DATA = {
     ],
   },
 
+  // Mission 10 — Valley of the Dolls.
+  10: {
+    name: "Valley of the Dolls",
+    maps: [
+      { id: "valley-of-the-dolls-underground", name: "Underground", src: "assets/maps/ValleyOfTheDollsUnderground.png", width: 1080, height: 1920 },
+      { id: "valley-of-the-dolls-ground",      name: "Ground",      src: "assets/maps/ValleyOfTheDollsGround.png",      width: 1080, height: 1920 },
+      { id: "valley-of-the-dolls-floor-1",     name: "Floor 1",     src: "assets/maps/ValleyOfTheDollsFloor1.png",     width: 1080, height: 1920 },
+      { id: "valley-of-the-dolls-floor-2",     name: "Floor 2",     src: "assets/maps/ValleyOfTheDollsFloor2.png",     width: 1080, height: 1920 },
+    ],
+  },
+
+  // Mission 11 — Elephant.
+  11: {
+    name: "Elephant",
+    maps: [
+      { id: "elephant-ground",  name: "Ground",  src: "assets/maps/ElephantGround.png", width: 1080, height: 1920 },
+      { id: "elephant-floor-1", name: "Floor 1", src: "assets/maps/ElephantFloor1.png", width: 1080, height: 1920 },
+    ],
+  },
+
   // Mission 12 — Rust Belt.
   12: {
     name: "Rust Belt",
@@ -151,6 +171,16 @@ const MISSION_DATA = {
     ],
   },
 
+  // Mission 16 — Carriers of the Vine.
+  16: {
+    name: "Carriers of the Vine",
+    maps: [
+      { id: "carriers-of-the-vine-underground", name: "Underground", src: "assets/maps/CarriersOfTheVineUnderground.png", width: 1080, height: 1920 },
+      { id: "carriers-of-the-vine-ground",      name: "Ground",      src: "assets/maps/CarriersOfTheVineGround.png",      width: 1080, height: 1920 },
+      { id: "carriers-of-the-vine-floor-1",     name: "Floor 1",     src: "assets/maps/CarriersOfTheVineFloor1.png",     width: 1080, height: 1920 },
+    ],
+  },
+
   // Mission 17 — Relapse. (Landscape blueprints, unlike most of the others.)
   17: {
     name: "Relapse",
@@ -158,6 +188,16 @@ const MISSION_DATA = {
       { id: "relapse-ground",  name: "Ground",  src: "assets/maps/RelapseGround.png", width: 1920, height: 1080 },
       { id: "relapse-floor-1", name: "Floor 1", src: "assets/maps/RelapseFloor1.png", width: 1920, height: 1080 },
       { id: "relapse-floor-2", name: "Floor 2", src: "assets/maps/RelapseFloor2.png", width: 1920, height: 1080 },
+    ],
+  },
+
+  // Mission 18 — Hide and Seek.
+  18: {
+    name: "Hide and Seek",
+    maps: [
+      { id: "hide-and-seek-ground",  name: "Ground",  src: "assets/maps/HideAndSeekGround.png", width: 1080, height: 1920 },
+      { id: "hide-and-seek-floor-1", name: "Floor 1", src: "assets/maps/HideAndSeekFloor1.png", width: 1080, height: 1920 },
+      { id: "hide-and-seek-floor-2", name: "Floor 2", src: "assets/maps/HideAndSeekFloor2.png", width: 1080, height: 1920 },
     ],
   },
 
