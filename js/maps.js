@@ -29,6 +29,62 @@
 const TOTAL_MISSIONS = 26;
 
 const MISSION_DATA = {
+  // Mission 1 — Thank You, Come Again. (Single sheet; white-background blueprint.)
+  1: {
+    name: "Thank You, Come Again",
+    maps: [
+      { id: "thank-you-come-again-ground", name: "Ground", src: "assets/maps/ThankYouComeAgain.png", width: 3840, height: 2160 },
+    ],
+  },
+
+  // Mission 2 — 23 Megabytes a Second.
+  2: {
+    name: "23 Megabytes a Second",
+    maps: [
+      { id: "23-megabytes-ground",  name: "Ground",  src: "assets/maps/23MegabytesGround.png", width: 2160, height: 3840 },
+      { id: "23-megabytes-floor-1", name: "Floor 1", src: "assets/maps/23MegabytesFloor1.png", width: 2160, height: 3840 },
+      { id: "23-megabytes-floor-2", name: "Floor 2", src: "assets/maps/23MegabytesFloor2.png", width: 2160, height: 3840 },
+    ],
+  },
+
+  // Mission 3 — Twisted Nerve.
+  3: {
+    name: "Twisted Nerve",
+    maps: [
+      { id: "twisted-nerve-underground", name: "Underground", src: "assets/maps/TwistedNerveUnderground.png", width: 2160, height: 3840 },
+      { id: "twisted-nerve-ground",      name: "Ground",      src: "assets/maps/TwistedNerveGround.png",      width: 2160, height: 3840 },
+      { id: "twisted-nerve-floor-1",     name: "Floor 1",     src: "assets/maps/TwistedNerveFloor1.png",     width: 2160, height: 3840 },
+      { id: "twisted-nerve-floor-2",     name: "Floor 2",     src: "assets/maps/TwistedNerveFloor2.png",     width: 2160, height: 3840 },
+    ],
+  },
+
+  // Mission 4 — The Spider.
+  4: {
+    name: "The Spider",
+    maps: [
+      { id: "the-spider-ground",  name: "Ground",  src: "assets/maps/TheSpiderGround.png", width: 2160, height: 3840 },
+      { id: "the-spider-floor-1", name: "Floor 1", src: "assets/maps/TheSpiderFloor1.png", width: 2160, height: 3840 },
+    ],
+  },
+
+  // Mission 5 — A Lethal Obsession.
+  5: {
+    name: "A Lethal Obsession",
+    maps: [
+      { id: "a-lethal-obsession-ground",  name: "Ground",  src: "assets/maps/ALethalObsessionGround.png", width: 1080, height: 1920 },
+      { id: "a-lethal-obsession-floor-1", name: "Floor 1", src: "assets/maps/ALethalObsessionFloor1.png", width: 1080, height: 1920 },
+      { id: "a-lethal-obsession-floor-2", name: "Floor 2", src: "assets/maps/ALethalObsessionFloor2.png", width: 1080, height: 1920 },
+    ],
+  },
+
+  // Mission 6 — Ides of March. (Single sheet.)
+  6: {
+    name: "Ides of March",
+    maps: [
+      { id: "ides-of-march-ground", name: "Ground", src: "assets/maps/IdesOfMarch.png", width: 1080, height: 1920 },
+    ],
+  },
+
   // Mission 7 — Sinuous Trail (the only one uploaded so far).
   7: {
     name: "Sinuous Trail",
@@ -36,6 +92,16 @@ const MISSION_DATA = {
       { id: "sinuous-trail-ground",  name: "Ground",  src: "assets/maps/SinousTrailGround.png",  width: 1080, height: 1920 },
       { id: "sinuous-trail-floor-1", name: "Floor 1", src: "assets/maps/SinuousTrailFloor1.png", width: 1920, height: 1080 },
       { id: "sinuous-trail-floor-2", name: "Floor 2", src: "assets/maps/SinuousTrailFloor2.png", width: 1080, height: 1920 },
+    ],
+  },
+
+  // Mission 8 — Ends of the Earth.
+  8: {
+    name: "Ends of the Earth",
+    maps: [
+      { id: "ends-of-the-earth-ground",  name: "Ground",  src: "assets/maps/EndsOfTheEarthGround.png", width: 1080, height: 1920 },
+      { id: "ends-of-the-earth-floor-1", name: "Floor 1", src: "assets/maps/EndsOfTheEarthFloor1.png", width: 1080, height: 1920 },
+      { id: "ends-of-the-earth-floor-2", name: "Floor 2", src: "assets/maps/EndsOfTheEarthFloor2.png", width: 1080, height: 1920 },
     ],
   },
 

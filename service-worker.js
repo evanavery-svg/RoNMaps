@@ -1,14 +1,22 @@
 /* RoN Maps service worker.
  *
- * Strategy — always run the newest app when online:
- *   - App shell (html/js/css/manifest): NETWORK-FIRST. Fetch fresh on every open,
- *     update the cache, and fall back to cache only when offline.
- *   - Maps + icons: CACHE-FIRST (large, rarely change), with runtime caching.
+ * Two caches, on purpose:
+ *   - SHELL_CACHE  (versioned): html/js/css/manifest/icons. NETWORK-FIRST, so the app is
+ *     always the newest build when online, falling back to cache offline. Bumping its
+ *     version is cheap — only a few hundred KB.
+ *   - MAPS_CACHE   (stable, unversioned): the blueprints. CACHE-FIRST. Deliberately NOT
+ *     tied to the shell version: the maps are ~10 MB and growing toward ~20 MB at all 26
+ *     missions, and wiping them on every code change would re-download the lot each time.
+ *     Maps are content-addressed by filename, so a changed map means a new filename.
  *
- * Bump CACHE_VERSION whenever you add/replace maps or want to force-clear old caches. */
-const CACHE_VERSION = "ronmaps-v22";
+ * Bump SHELL_VERSION for any app change. Bump MAPS_VERSION only if a map file is REPLACED
+ * in place under the same name (rare) and you need clients to re-fetch it. */
+const SHELL_VERSION = "v23";
+const MAPS_VERSION = "v1";
+const SHELL_CACHE = "ronmaps-shell-" + SHELL_VERSION;
+const MAPS_CACHE = "ronmaps-maps-" + MAPS_VERSION;
 
-const CACHE_ASSETS = [
+const SHELL_ASSETS = [
   "./",
   "./index.html",
   "./css/styles.css",
@@ -18,10 +26,30 @@ const CACHE_ASSETS = [
   "./icons/icon.svg",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
-  // --- map images (keep in sync with js/maps.js) ---
+];
+
+// --- map images (keep in sync with js/maps.js) ---
+const MAP_ASSETS = [
+  "./assets/maps/ThankYouComeAgain.png",
+  "./assets/maps/23MegabytesGround.png",
+  "./assets/maps/23MegabytesFloor1.png",
+  "./assets/maps/23MegabytesFloor2.png",
+  "./assets/maps/TwistedNerveUnderground.png",
+  "./assets/maps/TwistedNerveGround.png",
+  "./assets/maps/TwistedNerveFloor1.png",
+  "./assets/maps/TwistedNerveFloor2.png",
+  "./assets/maps/TheSpiderGround.png",
+  "./assets/maps/TheSpiderFloor1.png",
+  "./assets/maps/ALethalObsessionGround.png",
+  "./assets/maps/ALethalObsessionFloor1.png",
+  "./assets/maps/ALethalObsessionFloor2.png",
+  "./assets/maps/IdesOfMarch.png",
   "./assets/maps/SinousTrailGround.png",
   "./assets/maps/SinuousTrailFloor1.png",
   "./assets/maps/SinuousTrailFloor2.png",
+  "./assets/maps/EndsOfTheEarthGround.png",
+  "./assets/maps/EndsOfTheEarthFloor1.png",
+  "./assets/maps/EndsOfTheEarthFloor2.png",
   "./assets/maps/GreasedPalmsGround.png",
   "./assets/maps/GreasedPalmsFloor1.png",
   "./assets/maps/RustBeltUnderGround.png",
@@ -46,17 +74,28 @@ function isShell(url) {
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) =>
+    Promise.all([
       // best-effort: don't fail the whole install if one asset is missing
-      Promise.allSettled(CACHE_ASSETS.map((a) => cache.add(a)))
-    ).then(() => self.skipWaiting())
+      caches.open(SHELL_CACHE).then((c) => Promise.allSettled(SHELL_ASSETS.map((a) => c.add(a)))),
+      caches.open(MAPS_CACHE).then((c) =>
+        // only fetch maps we don't already have, so an app update doesn't re-download them
+        Promise.allSettled(MAP_ASSETS.map((a) =>
+          c.match(a).then((hit) => (hit ? null : c.add(a)))
+        ))
+      ),
+    ]).then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)))
+      Promise.all(
+        keys
+          // drop stale SHELL caches only — the maps cache is intentionally preserved
+          .filter((k) => k.startsWith("ronmaps-") && k !== SHELL_CACHE && k !== MAPS_CACHE)
+          .map((k) => caches.delete(k))
+      )
     ).then(() => self.clients.claim())
   );
 });
@@ -81,7 +120,7 @@ self.addEventListener("fetch", (event) => {
         .then((res) => {
           if (res && res.status === 200) {
             const copy = res.clone();
-            caches.open(CACHE_VERSION).then((c) => c.put(req, copy));
+            caches.open(SHELL_CACHE).then((c) => c.put(req, copy));
           }
           return res;
         })
@@ -92,14 +131,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for everything else (maps, icons).
+  // Cache-first for everything else (maps, icons) — checks both caches via caches.match.
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
       return fetch(req).then((res) => {
         if (res && res.status === 200 && res.type === "basic") {
           const copy = res.clone();
-          caches.open(CACHE_VERSION).then((c) => c.put(req, copy));
+          const target = /\/assets\/maps\//.test(url.pathname) ? MAPS_CACHE : SHELL_CACHE;
+          caches.open(target).then((c) => c.put(req, copy));
         }
         return res;
       }).catch(() => cached);

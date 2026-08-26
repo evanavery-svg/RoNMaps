@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.19";
+  const APP_VERSION = "0.20";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -79,6 +79,16 @@
     layers: { stamp: true, arrow: true, pen: true },
   };
   // which layer a mark belongs to
+  // Marker sizes are stored in IMAGE pixels, but maps come in different resolutions
+  // (1080-wide and 2160-wide blueprints both display at the same on-screen size, since
+  // layoutFloors fits by height). So state.stampSize is kept as a 1080-baseline value and
+  // scaled by the map's own width at the point of use — otherwise the same setting would
+  // render half as large on a 2160-wide map. Saved marks keep their absolute sizes.
+  const BASE_MAP_W = 1080;
+  function sizeScale(floor) {
+    const w = floor && floor.map && floor.map.width;
+    return w ? w / BASE_MAP_W : 1;
+  }
   function layerOf(m) { return (m.type === "arrow" || m.type === "pen") ? m.type : "stamp"; }
   function layerVisible(m) { return state.layers[layerOf(m)] !== false; }
 
@@ -168,7 +178,7 @@
 
   function addMarker(floor, x, y) {
     pushUndo(floor);
-    const m = { id: uid(), x, y, size: state.stampSize, color: state.color, type: state.stampType };
+    const m = { id: uid(), x, y, size: state.stampSize * sizeScale(floor), color: state.color, type: state.stampType };
     floor.markers.push(m);
     justPlacedId = m.id;
     clearSelection();            // a fresh stamp is NOT selected — tap it again to select
@@ -696,7 +706,7 @@
   // The in-progress shape is rendered as a normal mark node with a temp id, so it
   // looks exactly like the finished result while you draw.
   function draftMark(p) {
-    const base = { id: "__draft", size: state.stampSize, color: state.color };
+    const base = { id: "__draft", size: state.stampSize * sizeScale(p.floor), color: state.color };
     if (p.tool === "arrow") {
       const e2 = p.end || p.start;
       return Object.assign(base, { type: "arrow", x1: p.start.x, y1: p.start.y, x2: e2.x, y2: e2.y });
@@ -828,7 +838,7 @@
   function commitResize(p) {
     const m = markerById(p.floor, p.id);
     if (p.changed) {
-      if (m) state.stampSize = m.size;
+      if (m) state.stampSize = m.size / sizeScale(p.floor);
       saveFloor(p.floor);
       savePrefs();
     } else {
@@ -1066,7 +1076,7 @@
     const m = selectedMarker();
     if (m) {
       el.sizeGroup.hidden = false;
-      el.sizeRange.value = Math.round(clamp(m.size, 16, 220));
+      el.sizeRange.value = Math.round(clamp(m.size / sizeScale(selectedFloor()), 16, 220));
     } else if (state.tool === "arrow" || state.tool === "pen") {
       // no selection, but the slider sets the thickness of what you're about to draw
       el.sizeGroup.hidden = false;
@@ -1081,7 +1091,7 @@
     if (m) {
       const f = selectedFloor();
       if (!onSizeInput._dragging) { pushUndo(f); onSizeInput._dragging = true; }
-      m.size = val;
+      m.size = val * sizeScale(f);
       renderFloor(f);
     } else {
       state.stampSize = val;
@@ -1091,7 +1101,7 @@
   function onSizeCommit() {
     if (onSizeInput._dragging) {
       const m = selectedMarker();
-      if (m) { state.stampSize = m.size; saveFloor(selectedFloor()); savePrefs(); }
+      if (m) { state.stampSize = m.size / sizeScale(selectedFloor()); saveFloor(selectedFloor()); savePrefs(); }
       onSizeInput._dragging = false;
       updateButtons();
     }
