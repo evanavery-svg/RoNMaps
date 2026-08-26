@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.18";
+  const APP_VERSION = "0.19";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1102,15 +1102,46 @@
   // =========================================================================
   const hubCards = []; // [{ card, mission, available, metaEl }]
 
+  // S rank: a personal "I cleared this perfectly" flag per mission, separate from the
+  // tactical X/W/arrow/pen marks. Stored locally only — deliberately NOT included in
+  // shareCurrentMission's payload, since it's your own record, not squad tactical markup.
+  function srankKey(mission) { return STORAGE_PREFIX + "srank:" + mission.id; }
+  function getSRank(mission) {
+    try {
+      const raw = localStorage.getItem(srankKey(mission));
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      return (data && typeof data.at === "number") ? data : null;
+    } catch (e) { return null; }
+  }
+  function setSRank(mission, on) {
+    try {
+      if (on) localStorage.setItem(srankKey(mission), JSON.stringify({ at: Date.now() }));
+      else localStorage.removeItem(srankKey(mission));
+    } catch (e) {}
+  }
+  function formatSRankDate(at) {
+    try { return new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
+    catch (e) { return ""; }
+  }
+
   function buildHub() {
     el.missionGrid.innerHTML = "";
     hubCards.length = 0;
     for (const mission of MISSIONS) {
       const available = mission.maps.length > 0;
-      const card = document.createElement("button");
+      // A real <button> can't legally contain the nested S-rank <button>, so available
+      // cards are a div acting as a button (role + tabindex + click/keydown), matching
+      // native button semantics for click and keyboard (Enter/Space) activation.
+      const card = document.createElement(available ? "div" : "button");
       card.className = "mission-card " + (available ? "available" : "locked");
-      card.type = "button";
-      if (!available) card.disabled = true;
+      if (available) {
+        card.setAttribute("role", "button");
+        card.tabIndex = 0;
+      } else {
+        card.type = "button";
+        card.disabled = true;
+      }
 
       const num = document.createElement("div");
       num.className = "m-num";
@@ -1133,6 +1164,7 @@
       stats.append(chip, dots);
 
       card.append(num, name, meta);
+      let srankBtn = null;
       if (available) {
         // blueprint thumbnail behind the card
         const thumb = document.createElement("div");
@@ -1140,15 +1172,45 @@
         thumb.style.backgroundImage = "url('" + mission.maps[0].src + "')";
         card.appendChild(thumb);
         card.appendChild(stats);
+
+        srankBtn = document.createElement("button");
+        srankBtn.type = "button";
+        srankBtn.className = "srank-btn";
+        srankBtn.setAttribute("aria-label", "Toggle S rank for " + mission.name);
+        srankBtn.addEventListener("click", (e) => {
+          e.stopPropagation();   // never let this open the mission
+          const hc = hubCards.find((h) => h.mission === mission);
+          const ranked = !getSRank(mission);
+          setSRank(mission, ranked);
+          buzz(ranked ? [12, 40, 12] : 10);
+          if (hc) applySRankUI(hc);
+        });
+        card.appendChild(srankBtn);
+
         card.addEventListener("click", () => openMission(mission));
+        card.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openMission(mission); }
+        });
       }
       el.missionGrid.appendChild(card);
-      hubCards.push({ card, mission, available, metaEl: meta, chipEl: chip, dotsEl: dots });
+      hubCards.push({ card, mission, available, metaEl: meta, chipEl: chip, dotsEl: dots, srankBtn });
     }
     refreshHubCounts();
   }
 
-  // Per-mission marked totals (summed from storage): meta line, count chip, floor dots.
+  function applySRankUI(hc) {
+    if (!hc.srankBtn) return;
+    const rank = getSRank(hc.mission);
+    hc.card.classList.toggle("s-ranked", !!rank);
+    hc.srankBtn.classList.toggle("ranked", !!rank);
+    hc.srankBtn.textContent = rank ? "★" : "☆";
+    hc.srankBtn.title = rank
+      ? "S Ranked · " + formatSRankDate(rank.at) + " — tap to unmark"
+      : "Mark S Rank";
+  }
+
+  // Per-mission marked totals (summed from storage): meta line, count chip, floor dots,
+  // and S-rank status — all re-derived from storage each time so nothing can drift.
   function refreshHubCounts() {
     for (const hc of hubCards) {
       // locked cards already read "Coming soon" (or their name) + a lock glyph —
@@ -1170,6 +1232,8 @@
         d.title = c + " mark" + (c === 1 ? "" : "s");
         hc.dotsEl.appendChild(d);
       }
+
+      applySRankUI(hc);
     }
   }
 
