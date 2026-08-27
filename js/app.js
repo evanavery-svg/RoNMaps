@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.22";
+  const APP_VERSION = "0.23";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -316,6 +316,7 @@
   }
 
   const W_SCALE = 0.82;  // render W a bit smaller so the X reads a little bigger
+  const X_SCALE = 1.08;  // nudge the X a touch bigger than the base stamp size
 
   function buildMarker(m, selected) {
     const g = document.createElementNS(SVGNS, "g");
@@ -329,7 +330,7 @@
     if (m.type === "arrow") { buildArrow(g, m, selected); return g; }
     if (m.type === "pen") { buildPen(g, m, selected); return g; }
 
-    const rs = m.size * (m.type === "w" ? W_SCALE : 1); // rendered size for this shape
+    const rs = m.size * (m.type === "w" ? W_SCALE : X_SCALE); // rendered size for this shape
     const h = rs / 2;
     const sw = Math.max(4, rs * 0.16); // stroke scales with size
 
