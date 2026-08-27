@@ -14,7 +14,8 @@
   --danger: #b23b3b;
   --stage: #0b1017;
   --tap: 44px;
-  --rail: 132px;   /* width of the left toolbar rail */
+  --rail: 132px;          /* width of the left toolbar rail */
+  --rail-collapsed: 40px; /* collapsed rail shows only the toggle button */
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --r: 6px;        /* squarer corners than the old rounded look */
 
@@ -337,7 +338,33 @@ body::before {
   will-change: transform;
   backface-visibility: hidden;
   contain: paint;
+  transition: width .25s ease;
 }
+
+/* --- Rail toggle button (always visible, even when collapsed) --- */
+.rail-toggle {
+  flex-shrink: 0;
+  width: 100%;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--toolbar-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  transition: background .15s;
+}
+.rail-toggle:hover, .rail-toggle:focus-visible { background: var(--accent); color: var(--on-accent); }
+
+/* --- Collapsed rail --- */
+.toolbar.collapsed { width: var(--rail-collapsed); }
+.toolbar.collapsed .tb-group { display: none; }
+.stage.rail-collapsed { margin-left: var(--rail-collapsed); }
+
 .tb-group { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
 .tb-group + .tb-group { padding-top: 8px; border-top: 1px solid var(--line); }
 .tb-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
@@ -743,7 +770,7 @@ body::before {
 }
 
 @media (max-width: 560px) {
-  :root { --rail: 96px; }
+  :root { --rail: 96px; --rail-collapsed: 32px; }
   .tool-txt { display: none; }
   .tb-label { font-size: 10px; }
   .tb-title { font-size: 12px; }

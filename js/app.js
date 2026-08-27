@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.21";
+  const APP_VERSION = "0.22";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -15,6 +15,7 @@
   const DOUBLE_TAP_MS = 320;      // two taps within this window = double-tap (zoom)
   const DOUBLE_TAP_PX = 34;       // …and within this distance
   const LONG_PRESS_MS = 550;      // hold an X this long to delete it
+  const LONG_TAP_STAMP_MS = 380;  // hold on empty space this long to stamp X (shorter = W)
   const PRESETS = ["#e02424", "#f5a524", "#16a34a", "#2563eb", "#111111", "#ffffff"];
 
   // ---- DOM ----
@@ -31,6 +32,7 @@
     appFoot: document.getElementById("appFoot"),
     splash: document.getElementById("splash"),
     toolbar: document.getElementById("toolbar"),
+    railToggle: document.getElementById("railToggle"),
     backBtn: document.getElementById("backBtn"),
     missionTitle: document.getElementById("missionTitle"),
     stage: document.getElementById("stage"),
@@ -176,9 +178,9 @@
   let justPlacedId = null;   // marker that should play the pop-in animation (once)
   let placingTimer = null;
 
-  function addMarker(floor, x, y) {
+  function addMarker(floor, x, y, type) {
     pushUndo(floor);
-    const m = { id: uid(), x, y, size: state.stampSize * sizeScale(floor), color: state.color, type: state.stampType };
+    const m = { id: uid(), x, y, size: state.stampSize * sizeScale(floor), color: state.color, type: type || state.stampType };
     floor.markers.push(m);
     justPlacedId = m.id;
     clearSelection();            // a fresh stamp is NOT selected — tap it again to select
@@ -600,10 +602,21 @@
       };
       armLongPress(floor, mark.dataset.id);
     } else {
+      const startImg = toImage(floor, e.clientX, e.clientY);
       press = {
-        kind: "empty", floor, startImg: toImage(floor, e.clientX, e.clientY),
+        kind: "empty", floor, startImg,
         downX: e.clientX, downY: e.clientY, downTime: performance.now(), moved: false,
       };
+      if (state.tool === "stamp" && inBounds(floor, startImg)) {
+        clearLongPress();
+        longPressTimer = setTimeout(() => {
+          longPressTimer = null;
+          if (!press || press.moved) return;
+          press.longPressed = true;
+          addMarker(floor, press.startImg.x, press.startImg.y, "x");
+          lastTap = null;
+        }, LONG_TAP_STAMP_MS);
+      }
     }
   }
 
@@ -818,7 +831,7 @@
       // tap on the already-selected X — keep it selected (no-op)
     } else { // empty
       if (state.tool === "stamp" && inBounds(p.floor, p.startImg)) {
-        stampedId = addMarker(p.floor, p.startImg.x, p.startImg.y);
+        stampedId = addMarker(p.floor, p.startImg.x, p.startImg.y, "w");
       } else {
         deselect();
       }
@@ -961,7 +974,7 @@
   }
 
   const HINTS = {
-    stamp: "Tap to stamp · scroll for floors · double-tap to zoom.",
+    stamp: "Tap for W · hold for X · scroll for floors · double-tap to zoom.",
     arrow: "Drag to draw a route arrow. (Scrolling is off while Arrow is on.)",
     pen: "Drag to draw freehand. (Scrolling is off while Pen is on.)",
     eraser: "Eraser: tap a mark to remove it.",
@@ -1283,6 +1296,23 @@
     node.classList.add("entering");
   }
 
+  // ---- Collapsible rail ----
+  function isRailCollapsed() {
+    try { return localStorage.getItem(STORAGE_PREFIX + "rail") !== "0"; } catch (e) { return true; }
+  }
+  function applyRailState(collapsed) {
+    el.toolbar.classList.toggle("collapsed", collapsed);
+    el.stage.classList.toggle("rail-collapsed", collapsed);
+    el.railToggle.textContent = collapsed ? "›" : "‹";
+    el.railToggle.title = collapsed ? "Expand toolbar" : "Collapse toolbar";
+  }
+  function toggleRail() {
+    const collapsed = !el.toolbar.classList.contains("collapsed");
+    applyRailState(collapsed);
+    try { localStorage.setItem(STORAGE_PREFIX + "rail", collapsed ? "1" : "0"); } catch (e) {}
+    if (state.mission) { layoutFloors(); pinRail(); }
+  }
+
   function showHub() {
     teardownFloors();
     state.mission = null;
@@ -1300,6 +1330,7 @@
     el.hub.hidden = true;
     el.toolbar.hidden = false;
     el.stage.hidden = false;      // must be visible before we measure/observe
+    applyRailState(isRailCollapsed());
     playEnter(el.stage);
     playEnter(el.toolbar);
     pinRail();
@@ -1687,6 +1718,7 @@
     buildHub();
     el.appFoot.textContent = "© Avery LLC · v" + APP_VERSION;
 
+    el.railToggle.addEventListener("click", toggleRail);
     el.backBtn.addEventListener("click", showHub);
     el.stampXBtn.addEventListener("click", () => setStampType("x"));
     el.stampWBtn.addEventListener("click", () => setStampType("w"));
