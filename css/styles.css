@@ -337,9 +337,9 @@ body::before {
      keep it off the main paint path and free of sub-pixel shimmer */
   will-change: transform;
   backface-visibility: hidden;
-  contain: paint;
-  transition: width .25s ease;
+  contain: layout paint;
 }
+.toolbar.rail-anim { transition: width .25s ease; }
 
 /* --- Rail toggle button (always visible, even when collapsed) --- */
 .rail-toggle {
@@ -364,6 +364,7 @@ body::before {
 .toolbar.collapsed { width: var(--rail-collapsed); }
 .toolbar.collapsed .tb-group { display: none; }
 .stage.rail-collapsed { margin-left: var(--rail-collapsed); }
+.stage.rail-anim { transition: margin-left .25s ease; }
 
 .tb-group { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
 .tb-group + .tb-group { padding-top: 8px; border-top: 1px solid var(--line); }

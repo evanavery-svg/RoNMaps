@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.23";
+  const APP_VERSION = "0.24";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1309,9 +1309,16 @@
   }
   function toggleRail() {
     const collapsed = !el.toolbar.classList.contains("collapsed");
+    el.toolbar.classList.add("rail-anim");
+    el.stage.classList.add("rail-anim");
     applyRailState(collapsed);
     try { localStorage.setItem(STORAGE_PREFIX + "rail", collapsed ? "1" : "0"); } catch (e) {}
     if (state.mission) { layoutFloors(); pinRail(); }
+    clearTimeout(toggleRail._t);
+    toggleRail._t = setTimeout(() => {
+      el.toolbar.classList.remove("rail-anim");
+      el.stage.classList.remove("rail-anim");
+    }, 280);
   }
 
   function showHub() {
@@ -1423,7 +1430,7 @@
       floor.wrap.style.transform = "scale(" + ratio + ")";
       floor.wrap.style.willChange = "transform";   // promote for the animation only
       requestAnimationFrame(() => {
-        floor.wrap.style.transition = "transform .26s cubic-bezier(.22,.61,.36,1)";
+        floor.wrap.style.transition = "transform .32s cubic-bezier(.25,.1,.25,1)";
         floor.wrap.style.transform = "scale(1)";
       });
       clearTimeout(floor.zoomTimer);
@@ -1431,7 +1438,7 @@
         floor.wrap.style.transition = "";
         floor.wrap.style.transform = "";
         floor.wrap.style.willChange = "";          // release the layer again
-      }, 320);
+      }, 380);
     } else {
       floor.wrap.style.transform = "";
     }
@@ -1452,7 +1459,7 @@
   // visualViewport fires a burst of events during a pinch. Writing style.transform on
   // each one thrashes style recalc on the main thread and the rail visibly swims, so
   // coalesce into a single write per frame and skip no-op writes.
-  let pinRaf = 0, lastPin = "";
+  let pinRaf = 0, lastPinX = -1, lastPinY = -1, lastPinS = -1;
 
   function pinRail() {
     if (pinRaf) return;
@@ -1462,13 +1469,11 @@
     pinRaf = 0;
     const vv = window.visualViewport;
     if (!vv) return;
-    // round to whole pixels: sub-pixel values cause shimmer on the rail's text
     const x = Math.round(vv.offsetLeft), y = Math.round(vv.offsetTop);
-    const s = (1 / vv.scale).toFixed(4);
-    const next = "translate3d(" + x + "px," + y + "px,0) scale(" + s + ")";
-    if (next === lastPin) return;          // nothing moved — don't touch the DOM
-    lastPin = next;
-    el.toolbar.style.transform = next;
+    const s = Math.round(10000 / vv.scale) / 10000;
+    if (x === lastPinX && y === lastPinY && s === lastPinS) return;
+    lastPinX = x; lastPinY = y; lastPinS = s;
+    el.toolbar.style.transform = "translate3d(" + x + "px," + y + "px,0) scale(" + s + ")";
   }
   function setupViewportPin() {
     const vv = window.visualViewport;
