@@ -374,6 +374,8 @@ body::before {
 .tb-layers { gap: 5px; }
 .layer-btn { min-height: 34px; font-size: 13px; justify-content: flex-start; padding-left: 10px; }
 .layer-btn .tool-x { color: var(--ok); }
+.layer-btn { transition: background-color .18s ease, border-color .18s ease,
+              color .18s ease, box-shadow .18s ease, transform .1s ease, opacity .22s ease; }
 .layer-btn.off {
   opacity: .45;
   border-style: dashed;
@@ -428,8 +430,8 @@ body::before {
   line-height: 1;
 }
 .tool {
-  transition: background-color .14s ease, border-color .14s ease,
-              color .14s ease, transform .08s ease, opacity .14s ease;
+  transition: background-color .18s ease, border-color .18s ease,
+              color .18s ease, box-shadow .18s ease, transform .1s ease, opacity .18s ease;
 }
 .tool { border-radius: var(--r); position: relative; overflow: hidden; }
 .tool:hover { border-color: #3a5570; }
@@ -456,7 +458,7 @@ body::before {
   cursor: pointer;
   padding: 0;
 }
-.swatch { transition: border-color .14s ease, box-shadow .14s ease, transform .08s ease; }
+.swatch { transition: border-color .18s ease, box-shadow .18s ease, transform .1s ease; }
 .swatch:active { transform: scale(.92); }
 .swatch.active { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
 
@@ -599,7 +601,7 @@ body::before {
   from { r: 4; opacity: .85; stroke-width: 10; }
   to   { r: 90; opacity: 0;  stroke-width: 2; }
 }
-.stamp-pulse { fill: none; pointer-events: none; animation: pulse-ring .5s cubic-bezier(.2,.7,.3,1) forwards; }
+.stamp-pulse { fill: none; pointer-events: none; animation: pulse-ring .55s cubic-bezier(.16,.7,.3,1) forwards; }
 .mark.selected { touch-action: none; cursor: move; }  /* the selected X drags to reposition */
 .mark .sel-handle {
   fill: #fff;
@@ -611,14 +613,14 @@ body::before {
 
 /* A mark pops in when stamped (applied once, via the .placing class) */
 @keyframes mark-pop {
-  from { transform: scale(.55); opacity: .35; }
-  60%  { transform: scale(1.08); opacity: 1; }
+  from { transform: scale(.5); opacity: 0; }
+  55%  { transform: scale(1.06); opacity: 1; }
   to   { transform: scale(1); opacity: 1; }
 }
 .mark-stamp.placing {
   transform-box: fill-box;
   transform-origin: center;
-  animation: mark-pop .18s cubic-bezier(.22,.61,.36,1);
+  animation: mark-pop .24s cubic-bezier(.22,.61,.36,1);
 }
 
 /* Arrows and pen strokes draw themselves on when placed */
@@ -626,19 +628,19 @@ body::before {
 .mark-pen.placing .pen-stroke,
 .mark-arrow.placing .arrow-shaft {
   stroke-dasharray: 6000;
-  animation: draw-on .45s cubic-bezier(.22,.61,.36,1) forwards;
+  animation: draw-on .5s cubic-bezier(.22,.61,.36,1) forwards;
 }
 @keyframes head-in { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
 .mark-arrow.placing polygon {
   transform-box: fill-box; transform-origin: center;
-  animation: head-in .2s .28s backwards cubic-bezier(.22,.61,.36,1);
+  animation: head-in .22s .32s backwards cubic-bezier(.22,.61,.36,1);
 }
 
 /* the shape being drawn right now */
 .mark.draft { opacity: .85; pointer-events: none; }
 /* selection chrome fades in rather than hard-cutting */
 @keyframes sel-in { from { opacity: 0; } to { opacity: 1; } }
-.mark.selected .sel-box, .mark.selected .sel-handle { animation: sel-in .14s ease-out; }
+.mark.selected .sel-box, .mark.selected .sel-handle { animation: sel-in .2s ease-out; }
 
 .hint {
   position: absolute;
@@ -652,6 +654,7 @@ body::before {
   pointer-events: none;
   max-width: 92%;
   text-align: center;
+  transition: opacity .18s ease;
 }
 
 /* ---------------- First-load splash ---------------- */
@@ -701,7 +704,7 @@ body::before {
   display: flex; align-items: center; justify-content: center;
   background: var(--modal-bg);
   backdrop-filter: blur(3px);
-  animation: fade-in .18s ease-out;
+  animation: fade-in .22s ease-out;
   padding: 20px;
 }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -712,7 +715,7 @@ body::before {
   border: 1px solid var(--line); border-radius: 14px;
   padding: 22px;
   box-shadow: 0 18px 50px var(--shadow);
-  animation: sheet-in .22s cubic-bezier(.22,.61,.36,1);
+  animation: sheet-in .28s cubic-bezier(.22,.61,.36,1);
 }
 .sheet-title { margin: 0 0 8px; font-size: 20px; }
 .sheet-body { margin: 0 0 18px; color: var(--muted); font-size: 14px; line-height: 1.45; }
