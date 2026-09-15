@@ -11,7 +11,7 @@
  *
  * Bump SHELL_VERSION for any app change. Bump MAPS_VERSION only if a map file is REPLACED
  * in place under the same name (rare) and you need clients to re-fetch it. */
-const SHELL_VERSION = "v29";
+const SHELL_VERSION = "v30";
 const MAPS_VERSION = "v1";
 const SHELL_CACHE = "ronmaps-shell-" + SHELL_VERSION;
 const MAPS_CACHE = "ronmaps-maps-" + MAPS_VERSION;
@@ -82,6 +82,16 @@ const MAP_ASSETS = [
   "./assets/maps/LawmakerGround.png",
   "./assets/maps/LawmakerFloor1.png",
   "./assets/maps/LawmakerFloor2.png",
+  "./assets/maps/MirageAtSeaEngine.png",
+  "./assets/maps/MirageAtSeaFloor1.png",
+  "./assets/maps/MirageAtSeaFloor2.png",
+  "./assets/maps/MirageAtSeaFloor3.png",
+  "./assets/maps/MirageAtSeaFloor4.png",
+  "./assets/maps/HungerStrikeGround.png",
+  "./assets/maps/HungerStrikeFloor1.png",
+  "./assets/maps/StolenValorBasement.png",
+  "./assets/maps/StolenValorGround.png",
+  "./assets/maps/StolenValorFloor1.png",
 ];
 
 // App-shell requests get the network-first treatment.

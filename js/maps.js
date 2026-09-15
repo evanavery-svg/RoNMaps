@@ -227,6 +227,37 @@ const MISSION_DATA = {
       { id: "lawmaker-floor-2", name: "Floor 2", src: "assets/maps/LawmakerFloor2.png",  width: 3840, height: 2715 },
     ],
   },
+
+  // Mission 22 — Mirage at Sea.
+  22: {
+    name: "Mirage at Sea",
+    maps: [
+      { id: "mirage-at-sea-engine",  name: "Engine",  src: "assets/maps/MirageAtSeaEngine.png",  width: 3840, height: 2715 },
+      { id: "mirage-at-sea-floor-1", name: "Floor 1", src: "assets/maps/MirageAtSeaFloor1.png",  width: 3840, height: 2715 },
+      { id: "mirage-at-sea-floor-2", name: "Floor 2", src: "assets/maps/MirageAtSeaFloor2.png",  width: 3840, height: 2715 },
+      { id: "mirage-at-sea-floor-3", name: "Floor 3", src: "assets/maps/MirageAtSeaFloor3.png",  width: 3840, height: 2715 },
+      { id: "mirage-at-sea-floor-4", name: "Floor 4", src: "assets/maps/MirageAtSeaFloor4.png",  width: 3840, height: 2715 },
+    ],
+  },
+
+  // Mission 25 — Hunger Strike.
+  25: {
+    name: "Hunger Strike",
+    maps: [
+      { id: "hunger-strike-ground",  name: "Ground",  src: "assets/maps/HungerStrikeGround.png",  width: 491, height: 571 },
+      { id: "hunger-strike-floor-1", name: "Floor 1", src: "assets/maps/HungerStrikeFloor1.png",  width: 431, height: 587 },
+    ],
+  },
+
+  // Mission 26 — Stolen Valor.
+  26: {
+    name: "Stolen Valor",
+    maps: [
+      { id: "stolen-valor-basement", name: "Basement", src: "assets/maps/StolenValorBasement.png", width: 455, height: 400 },
+      { id: "stolen-valor-ground",   name: "Ground",   src: "assets/maps/StolenValorGround.png",   width: 582, height: 495 },
+      { id: "stolen-valor-floor-1",  name: "Floor 1",  src: "assets/maps/StolenValorFloor1.png",   width: 382, height: 387 },
+    ],
+  },
 };
 
 // Build the full list of 26 mission slots. Slots without data show as "Coming soon".
