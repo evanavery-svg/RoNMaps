@@ -201,12 +201,32 @@ const MISSION_DATA = {
     ],
   },
 
-  // Add more missions here as you upload them, e.g.:
-  // 1:  { name: "…", maps: [ … ] },
-  //
-  // You can also NAME a mission before you have its maps — just give it a name and no maps:
-  //   3:  { name: "Twisted Nerve" },
-  // It shows in the hub with its real name but stays "Coming soon" (locked) until you add maps.
+  // Mission 19 — Dorms.
+  19: {
+    name: "Dorms",
+    maps: [
+      { id: "dorms-ground",  name: "Ground",  src: "assets/maps/DormsGround.png",  width: 3840, height: 2715 },
+      { id: "dorms-floor-1", name: "Floor 1", src: "assets/maps/DormsFloor1.png",  width: 3840, height: 2715 },
+    ],
+  },
+
+  // Mission 20 — Narcos.
+  20: {
+    name: "Narcos",
+    maps: [
+      { id: "narcos-ground", name: "Ground", src: "assets/maps/NarcosGround.png", width: 3840, height: 2715 },
+    ],
+  },
+
+  // Mission 21 — Lawmaker.
+  21: {
+    name: "Lawmaker",
+    maps: [
+      { id: "lawmaker-ground",  name: "Ground",  src: "assets/maps/LawmakerGround.png",  width: 3840, height: 2715 },
+      { id: "lawmaker-floor-1", name: "Floor 1", src: "assets/maps/LawmakerFloor1.png",  width: 3840, height: 2715 },
+      { id: "lawmaker-floor-2", name: "Floor 2", src: "assets/maps/LawmakerFloor2.png",  width: 3840, height: 2715 },
+    ],
+  },
 };
 
 // Build the full list of 26 mission slots. Slots without data show as "Coming soon".
