@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.28";
+  const APP_VERSION = "0.29";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -33,6 +33,7 @@
     splash: document.getElementById("splash"),
     toolbar: document.getElementById("toolbar"),
     railToggle: document.getElementById("railToggle"),
+    moreToggle: document.getElementById("moreToggle"),
     backBtn: document.getElementById("backBtn"),
     missionTitle: document.getElementById("missionTitle"),
     stage: document.getElementById("stage"),
@@ -1321,6 +1322,10 @@
     }, 280);
   }
 
+  function toggleMore() {
+    el.toolbar.classList.toggle("show-more");
+  }
+
   function showHub() {
     teardownFloors();
     state.mission = null;
@@ -1725,6 +1730,7 @@
     el.appFoot.textContent = "© Avery LLC · v" + APP_VERSION;
 
     el.railToggle.addEventListener("click", toggleRail);
+    el.moreToggle.addEventListener("click", toggleMore);
     el.backBtn.addEventListener("click", showHub);
     el.stampXBtn.addEventListener("click", () => setStampType("x"));
     el.stampWBtn.addEventListener("click", () => setStampType("w"));

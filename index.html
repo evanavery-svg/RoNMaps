@@ -86,7 +86,15 @@
       <span class="tb-title" id="missionTitle"></span>
     </div>
 
-    <div class="tb-group tb-tools">
+    <div class="tb-group tb-colors" id="swatches" role="group" aria-label="Marker color"></div>
+
+    <div class="tb-group tb-actions">
+      <button id="undoBtn" class="tool" title="Undo">↶<span class="tool-txt">Undo</span></button>
+    </div>
+
+    <button id="moreToggle" class="more-toggle" type="button" title="More tools">⋯</button>
+
+    <div class="tb-group tb-tools tb-extra">
       <button id="stampXBtn" class="tool active" aria-pressed="true" title="Stamp X (tap the map)">
         <span class="tool-x">✕</span><span class="tool-txt">X</span>
       </button>
@@ -104,31 +112,28 @@
       </button>
     </div>
 
-    <div class="tb-group tb-colors" id="swatches" role="group" aria-label="Marker color"></div>
-
-    <div class="tb-group">
+    <div class="tb-group tb-extra">
       <label class="color-chip" title="Pick a custom color">
         <input type="color" id="colorInput" value="#e02424" />
       </label>
     </div>
 
-    <div class="tb-group tb-actions">
-      <button id="undoBtn" class="tool" title="Undo">↶<span class="tool-txt">Undo</span></button>
+    <div class="tb-group tb-actions tb-extra">
       <button id="redoBtn" class="tool" title="Redo">↷<span class="tool-txt">Redo</span></button>
       <button id="resetBtn" class="tool tool-danger" title="Clear all marks on every floor">⟲<span class="tool-txt">Reset</span></button>
     </div>
 
-    <div class="tb-group tb-share">
+    <div class="tb-group tb-share tb-extra">
       <button id="shareBtn" class="tool" title="Copy a link to this marked-up mission">⇪<span class="tool-txt">Share</span></button>
       <button id="themeCycleBtn" class="tool theme-cycle" title="Switch theme">◐<span class="tool-txt" id="themeCycleLabel">Theme</span></button>
     </div>
 
-    <div class="tb-group tb-size" id="sizeGroup" hidden>
+    <div class="tb-group tb-size tb-extra" id="sizeGroup" hidden>
       <label class="tb-label" for="sizeRange">Size</label>
       <input type="range" id="sizeRange" min="16" max="220" value="64" />
     </div>
 
-    <div class="tb-group tb-layers" role="group" aria-label="Show or hide mark layers">
+    <div class="tb-group tb-layers tb-extra" role="group" aria-label="Show or hide mark layers">
       <span class="tb-label">Layers</span>
       <button id="layerStampBtn" class="tool layer-btn" aria-pressed="true" title="Show/hide X and W marks">
         <span class="tool-x">✕</span><span class="tool-txt">Marks</span>
