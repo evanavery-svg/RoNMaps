@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.29";
+  const APP_VERSION = "0.30";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1061,6 +1061,7 @@
     if (tool !== "stamp") deselect();
     // While a draw tool is active, a one-finger drag must draw, not scroll the floors.
     el.scroller.classList.toggle("drawing", tool === "arrow" || tool === "pen");
+    el.scroller.classList.toggle("stamp-cursor", tool === "stamp" || tool === "eraser");
     updateToolButtons();
     updateSizeGroup();
     el.hint.textContent = HINTS[tool] || HINTS.stamp;
