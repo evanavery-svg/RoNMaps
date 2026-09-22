@@ -278,9 +278,38 @@ const MISSION_DATA = {
       { id: "stolen-valor-floor-1",  name: "Floor 1",  src: "assets/maps/StolenValorFloor1.png",   width: 382, height: 387 },
     ],
   },
+
+  // Mission 27 — No Good Deed.
+  27: {
+    name: "No Good Deed",
+    maps: [
+      { id: "no-good-deed-ground", name: "Ground", src: "assets/maps/NoGoodDeedGround.png", width: 3840, height: 2715 },
+    ],
+  },
+
+  // Mission 28 — All Goods Burn.
+  28: {
+    name: "All Goods Burn",
+    maps: [
+      { id: "all-goods-burn-underground", name: "Underground", src: "assets/maps/AllGoodsBurnUnderGround.png", width: 3840, height: 2715 },
+      { id: "all-goods-burn-ground",      name: "Ground",      src: "assets/maps/AllGoodsBurnGround.png",      width: 3840, height: 2715 },
+      { id: "all-goods-burn-floor-1",     name: "Floor 1",     src: "assets/maps/AllGoodsBurnFloor1.png",     width: 3840, height: 2715 },
+    ],
+  },
+
+  // Mission 29 — A New America.
+  29: {
+    name: "A New America",
+    maps: [
+      { id: "a-new-america-ground",  name: "Ground",  src: "assets/maps/ANewAmericaGround.png",  width: 3840, height: 2715 },
+      { id: "a-new-america-floor-1", name: "Floor 1", src: "assets/maps/ANewAmericaFloor1.png",  width: 3840, height: 2715 },
+      { id: "a-new-america-floor-2", name: "Floor 2", src: "assets/maps/ANewAmericaFloor2.png",  width: 3840, height: 2715 },
+      { id: "a-new-america-floor-3", name: "Floor 3", src: "assets/maps/ANewAmericaFloor3.png",  width: 3840, height: 2715 },
+    ],
+  },
 };
 
-// Build the full list of 26 mission slots. Slots without data show as "Coming soon".
+// Build the full list of 29 mission slots. Slots without data show as "Coming soon".
 const MISSIONS = [];
 for (let n = 1; n <= TOTAL_MISSIONS; n++) {
   const d = MISSION_DATA[n] || {};
