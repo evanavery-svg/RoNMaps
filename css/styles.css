@@ -92,7 +92,7 @@
   --glow: rgba(220,38,38,.1);
 }
 
-.mono, .tb-label, .m-num, .floor-label, .floor-pill, .m-meta, .hub-sub {
+.mono, .tb-label, .m-num, .floor-label, .floor-pill, .m-meta {
   font-family: var(--mono);
   text-transform: uppercase;
   letter-spacing: .12em;
@@ -132,19 +132,22 @@ body {
   letter-spacing: -.02em;
   color: var(--text);
 }
-.hub-sub { margin: 6px 0 0; color: var(--muted); font-size: 12px; letter-spacing: .18em; }
-
-.install-btn {
-  position: absolute; right: 0;
-  min-height: 36px; padding: 0 16px;
-  background: var(--accent); color: var(--on-accent);
-  border: none; border-radius: var(--r);
-  font-size: 14px; font-weight: 600; cursor: pointer;
-  transition: opacity .15s ease;
+.settings-btn {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  width: 36px; height: 36px;
+  background: var(--toolbar-2); color: var(--muted);
+  border: 1px solid var(--line); border-radius: var(--r);
+  font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: color .15s ease, background .15s ease;
 }
-.install-btn:hover { opacity: .85; }
-.ios-install-hint { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
-
+.settings-btn:hover { color: var(--text); background: var(--card-hover); }
+.settings-dropdown {
+  position: absolute; right: 0; top: 100%; margin-top: 6px;
+  background: var(--toolbar); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 8px; z-index: 10;
+  box-shadow: 0 8px 24px var(--shadow);
+}
 .hub-controls {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   justify-content: center; margin-top: 18px;
@@ -159,8 +162,6 @@ body {
 }
 .mission-search:focus { outline: none; border-color: var(--accent); }
 .mission-search::placeholder { color: var(--muted); }
-.toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; cursor: pointer; white-space: nowrap; }
-.toggle input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
 
 .hub-empty { text-align: center; color: var(--muted); margin: 24px 0; }
 
@@ -840,8 +841,6 @@ body {
   .layer-btn { min-height: 28px; font-size: 11px; }
   .floor-pill { min-height: 28px; font-size: 10px; }
   .hint { font-size: 11px; }
-  .install-btn { position: static; margin: 0; }
-  .hub-top { flex-direction: column; gap: 8px; }
   .mission-grid { gap: 8px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   .mission-card .m-name { font-size: 14px; }
   .mission-card .m-info { padding: 10px 10px 8px; }

@@ -36,24 +36,20 @@
   <section class="hub" id="hub">
     <header class="hub-head">
       <div class="hub-top">
-        <h1 class="hub-title">Ready or Not — Maps</h1>
-        <button id="installBtn" class="install-btn" hidden>⤓ Install</button>
+        <h1 class="hub-title">Ready or Not Maps</h1>
+        <button class="settings-btn" id="settingsBtn" type="button" title="Settings" aria-label="Settings">⚙</button>
       </div>
-      <p class="hub-sub">Pick a mission</p>
-      <div class="hub-controls">
-        <input id="missionSearch" class="mission-search" type="search"
-               inputmode="search" placeholder="Search missions…" aria-label="Search missions" />
-        <label class="toggle">
-          <input type="checkbox" id="hideComingSoon" />
-          <span>Hide coming soon</span>
-        </label>
+      <div class="settings-dropdown" id="settingsDropdown" hidden>
         <div class="theme-seg" id="themeSeg" role="group" aria-label="Theme">
           <button type="button" data-theme-val="tactical" title="Tactical — the default dark briefing look">Tactical</button>
           <button type="button" data-theme-val="night" title="Night Ops — for a dark room; also dims the blueprint">Night</button>
           <button type="button" data-theme-val="day" title="Daylight — light UI for a bright room">Day</button>
         </div>
       </div>
-      <p class="ios-install-hint" id="iosHint" hidden>To install: tap the Share button, then “Add to Home Screen”.</p>
+      <div class="hub-controls">
+        <input id="missionSearch" class="mission-search" type="search"
+               inputmode="search" placeholder="Search missions…" aria-label="Search missions" />
+      </div>
     </header>
     <div class="mission-grid" id="missionGrid"></div>
     <p class="hub-empty" id="hubEmpty" hidden>No missions match your search.</p>

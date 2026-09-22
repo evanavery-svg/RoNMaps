@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.36";
+  const APP_VERSION = "0.37";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -23,10 +23,9 @@
     hub: document.getElementById("hub"),
     missionGrid: document.getElementById("missionGrid"),
     missionSearch: document.getElementById("missionSearch"),
-    hideComingSoon: document.getElementById("hideComingSoon"),
     hubEmpty: document.getElementById("hubEmpty"),
-    installBtn: document.getElementById("installBtn"),
-    iosHint: document.getElementById("iosHint"),
+    settingsBtn: document.getElementById("settingsBtn"),
+    settingsDropdown: document.getElementById("settingsDropdown"),
     offlineBadge: document.getElementById("offlineBadge"),
     toast: document.getElementById("toast"),
     appFoot: document.getElementById("appFoot"),
@@ -1280,9 +1279,7 @@
 
   function filterHub() {
     const q = el.missionSearch.value.trim().toLowerCase();
-    const hideSoon = el.hideComingSoon.checked;
     let shown = 0;
-    // Check if search matches a group label
     const groupMatch = !q ? null : MISSION_GROUPS.find((g) => g.label.toLowerCase().includes(q));
     for (const hc of hubCards) {
       const matchesSearch = !q ||
@@ -1290,8 +1287,7 @@
         String(hc.mission.number) === q ||
         ("mission " + hc.mission.number).includes(q) ||
         (groupMatch && hc.mission.number >= groupMatch.from && hc.mission.number <= groupMatch.to);
-      const passesToggle = !hideSoon || hc.available;
-      const visible = matchesSearch && passesToggle;
+      const visible = matchesSearch;
       hc.card.hidden = !visible;
       if (visible) shown++;
     }
@@ -1786,7 +1782,7 @@
     updateLayerButtons();
     updateThemeButtons();   // the inline head script already applied the saved theme
     buildHub();
-    el.appFoot.innerHTML = "© Avery LLC · v" + APP_VERSION +
+    el.appFoot.innerHTML = "v" + APP_VERSION +
       '<br><span class="foot-legal">© VOID Interactive. Ready or Not is a trademark of VOID Interactive. This is a fan-made project.</span>';
 
     el.railToggle.addEventListener("click", toggleRail);
@@ -1856,16 +1852,17 @@
       }
     });
 
-    // Hub search + "hide coming soon" toggle
     el.missionSearch.addEventListener("input", filterHub);
-    try {
-      el.hideComingSoon.checked = localStorage.getItem(STORAGE_PREFIX + "hideSoon") === "1";
-    } catch (e) {}
-    el.hideComingSoon.addEventListener("change", () => {
-      try { localStorage.setItem(STORAGE_PREFIX + "hideSoon", el.hideComingSoon.checked ? "1" : "0"); } catch (e) {}
-      filterHub();
-    });
     filterHub();
+
+    // Settings dropdown toggle
+    el.settingsBtn.addEventListener("click", () => {
+      el.settingsDropdown.hidden = !el.settingsDropdown.hidden;
+    });
+    document.addEventListener("click", (e) => {
+      if (!el.settingsBtn.contains(e.target) && !el.settingsDropdown.contains(e.target))
+        el.settingsDropdown.hidden = true;
+    });
 
     setupPwaPolish();
 
@@ -1880,28 +1877,7 @@
   // =========================================================================
   // PWA polish: install button, offline badge, "updated" toast
   // =========================================================================
-  let deferredInstall = null;
-
   function setupPwaPolish() {
-    // Install button (Chromium/Android). iOS Safari fires no event → show a hint instead.
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      deferredInstall = e;
-      if (!isStandalone()) el.installBtn.hidden = false;
-    });
-    el.installBtn.addEventListener("click", async () => {
-      if (!deferredInstall) return;
-      deferredInstall.prompt();
-      try { await deferredInstall.userChoice; } catch (e) {}
-      deferredInstall = null;
-      el.installBtn.hidden = true;
-    });
-    window.addEventListener("appinstalled", () => {
-      el.installBtn.hidden = true;
-      deferredInstall = null;
-    });
-    if (isIOS() && !isStandalone()) el.iosHint.hidden = false;
-
     // Offline indicator
     const updateOnline = () => { el.offlineBadge.hidden = navigator.onLine; };
     window.addEventListener("online", updateOnline);
@@ -1921,11 +1897,6 @@
     return window.matchMedia && window.matchMedia("(display-mode: standalone)").matches ||
       window.navigator.standalone === true;
   }
-  function isIOS() {
-    return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  }
-
   let toastTimer = null;
   function hideToast() {
     el.toast.classList.remove("show");
