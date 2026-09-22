@@ -1,12 +1,12 @@
 // Mission + map manifest for Ready or Not.
 //
-// There are 26 missions total. Only the ones you've added maps for are playable in the hub;
+// There are 29 missions total. Only the ones you've added maps for are playable in the hub;
 // the rest show as "Coming soon" until you fill them in.
 //
 // ---------------------------------------------------------------------------
 // TO ADD A MISSION'S MAPS:
 //   1. Drop the image files into assets/maps/  (PNG or JPG)
-//   2. Add an entry to MISSION_DATA below, keyed by the mission's number (1-26):
+//   2. Add an entry to MISSION_DATA below, keyed by the mission's number (1-29):
 //
 //        12: {
 //          name: "Mission Name",
@@ -85,7 +85,7 @@ const MISSION_DATA = {
     ],
   },
 
-  // Mission 7 — Sinuous Trail (the only one uploaded so far).
+  // Mission 7 — Sinuous Trail.
   7: {
     name: "Sinuous Trail",
     maps: [

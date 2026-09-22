@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.37";
+  const APP_VERSION = "0.38";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1893,10 +1893,6 @@
     } catch (e) {}
   }
 
-  function isStandalone() {
-    return window.matchMedia && window.matchMedia("(display-mode: standalone)").matches ||
-      window.navigator.standalone === true;
-  }
   let toastTimer = null;
   function hideToast() {
     el.toast.classList.remove("show");

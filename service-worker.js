@@ -5,13 +5,13 @@
  *     always the newest build when online, falling back to cache offline. Bumping its
  *     version is cheap — only a few hundred KB.
  *   - MAPS_CACHE   (stable, unversioned): the blueprints. CACHE-FIRST. Deliberately NOT
- *     tied to the shell version: the maps are ~10 MB and growing toward ~20 MB at all 26
+ *     tied to the shell version: the maps are ~10 MB and growing toward ~20 MB at all 29
  *     missions, and wiping them on every code change would re-download the lot each time.
  *     Maps are content-addressed by filename, so a changed map means a new filename.
  *
  * Bump SHELL_VERSION for any app change. Bump MAPS_VERSION only if a map file is REPLACED
  * in place under the same name (rare) and you need clients to re-fetch it. */
-const SHELL_VERSION = "v44";
+const SHELL_VERSION = "v45";
 const MAPS_VERSION = "v1";
 const SHELL_CACHE = "ronmaps-shell-" + SHELL_VERSION;
 const MAPS_CACHE = "ronmaps-maps-" + MAPS_VERSION;
