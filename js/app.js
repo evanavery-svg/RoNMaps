@@ -1209,17 +1209,7 @@
       if (available) {
         const thumb = document.createElement("div");
         thumb.className = "m-thumb";
-        const thumbImg = new Image();
-        const thumbSrc = "thumbnails/mission-" + mission.number + ".png";
-        thumbImg.onload = () => { thumb.style.backgroundImage = "url('" + thumbSrc + "')"; };
-        thumbImg.onerror = () => {
-          const jpgSrc = "thumbnails/mission-" + mission.number + ".jpg";
-          const jpg = new Image();
-          jpg.onload = () => { thumb.style.backgroundImage = "url('" + jpgSrc + "')"; };
-          jpg.onerror = () => { thumb.style.backgroundImage = "url('" + mission.maps[0].src + "')"; };
-          jpg.src = jpgSrc;
-        };
-        thumbImg.src = thumbSrc;
+        thumb.style.backgroundImage = "url('thumbnails/" + mission.number + ".webp')";
         card.appendChild(thumb);
         info.appendChild(stats);
 

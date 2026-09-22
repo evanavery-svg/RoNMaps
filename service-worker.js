@@ -11,7 +11,7 @@
  *
  * Bump SHELL_VERSION for any app change. Bump MAPS_VERSION only if a map file is REPLACED
  * in place under the same name (rare) and you need clients to re-fetch it. */
-const SHELL_VERSION = "v41";
+const SHELL_VERSION = "v42";
 const MAPS_VERSION = "v1";
 const SHELL_CACHE = "ronmaps-shell-" + SHELL_VERSION;
 const MAPS_CACHE = "ronmaps-maps-" + MAPS_VERSION;
@@ -26,6 +26,39 @@ const SHELL_ASSETS = [
   "./icons/icon.svg",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
+];
+
+// --- thumbnails (keep in sync with thumbnails/ folder) ---
+const THUMB_ASSETS = [
+  "./thumbnails/1.webp",
+  "./thumbnails/2.webp",
+  "./thumbnails/3.webp",
+  "./thumbnails/4.webp",
+  "./thumbnails/5.webp",
+  "./thumbnails/6.webp",
+  "./thumbnails/7.webp",
+  "./thumbnails/8.webp",
+  "./thumbnails/9.webp",
+  "./thumbnails/10.webp",
+  "./thumbnails/11.webp",
+  "./thumbnails/12.webp",
+  "./thumbnails/13.webp",
+  "./thumbnails/14.webp",
+  "./thumbnails/15.webp",
+  "./thumbnails/16.webp",
+  "./thumbnails/17.webp",
+  "./thumbnails/18.webp",
+  "./thumbnails/19.webp",
+  "./thumbnails/20.webp",
+  "./thumbnails/21.webp",
+  "./thumbnails/22.webp",
+  "./thumbnails/23.webp",
+  "./thumbnails/24.webp",
+  "./thumbnails/25.webp",
+  "./thumbnails/26.webp",
+  "./thumbnails/27.webp",
+  "./thumbnails/28.webp",
+  "./thumbnails/29.webp",
 ];
 
 // --- map images (keep in sync with js/maps.js) ---
@@ -120,8 +153,8 @@ self.addEventListener("install", (event) => {
       // best-effort: don't fail the whole install if one asset is missing
       caches.open(SHELL_CACHE).then((c) => Promise.allSettled(SHELL_ASSETS.map((a) => c.add(a)))),
       caches.open(MAPS_CACHE).then((c) =>
-        // only fetch maps we don't already have, so an app update doesn't re-download them
-        Promise.allSettled(MAP_ASSETS.map((a) =>
+        // only fetch maps/thumbs we don't already have, so an app update doesn't re-download them
+        Promise.allSettled([...MAP_ASSETS, ...THUMB_ASSETS].map((a) =>
           c.match(a).then((hit) => (hit ? null : c.add(a)))
         ))
       ),
@@ -180,7 +213,7 @@ self.addEventListener("fetch", (event) => {
       return fetch(req).then((res) => {
         if (res && res.status === 200 && res.type === "basic") {
           const copy = res.clone();
-          const target = /\/assets\/maps\//.test(url.pathname) ? MAPS_CACHE : SHELL_CACHE;
+          const target = /\/(assets\/maps|thumbnails)\//.test(url.pathname) ? MAPS_CACHE : SHELL_CACHE;
           caches.open(target).then((c) => c.put(req, copy));
         }
         return res;
