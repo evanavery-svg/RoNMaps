@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.34";
+  const APP_VERSION = "0.35";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1202,15 +1202,16 @@
       dots.className = "m-dots";
       stats.append(chip, dots);
 
-      card.append(num, name, meta);
+      const info = document.createElement("div");
+      info.className = "m-info";
+      info.append(num, name, meta);
       let srankBtn = null;
       if (available) {
-        // blueprint thumbnail behind the card
         const thumb = document.createElement("div");
         thumb.className = "m-thumb";
         thumb.style.backgroundImage = "url('" + mission.maps[0].src + "')";
         card.appendChild(thumb);
-        card.appendChild(stats);
+        info.appendChild(stats);
 
         srankBtn = document.createElement("button");
         srankBtn.type = "button";
@@ -1231,6 +1232,7 @@
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openMission(mission); }
         });
       }
+      card.appendChild(info);
       el.missionGrid.appendChild(card);
       hubCards.push({ card, mission, available, metaEl: meta, chipEl: chip, dotsEl: dots, srankBtn });
     }

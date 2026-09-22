@@ -185,9 +185,9 @@ body {
 /* ---- Mission grid & cards ---- */
 .mission-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 10px;
-  max-width: 960px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  max-width: 1080px;
   margin: 0 auto;
 }
 .mission-group-header {
@@ -207,9 +207,7 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-height: 148px;
-  padding: 16px;
+  aspect-ratio: 3 / 4;
   border: 1px solid var(--card-border);
   border-radius: var(--r-lg);
   background: var(--card-bg);
@@ -217,75 +215,87 @@ body {
   text-align: left;
   cursor: pointer;
   font: inherit;
-  transition: background-color .15s ease, border-color .15s ease, transform .15s ease;
+  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
 }
 .mission-card .m-thumb {
-  position: absolute; inset: 0; z-index: -1;
-  background-size: cover; background-position: center 30%;
-  opacity: .06;
-  filter: saturate(.3) brightness(.8);
-  transition: opacity .2s ease;
+  position: absolute; inset: 0; z-index: 0;
+  background-size: cover; background-position: center 25%;
+  opacity: .35;
+  filter: saturate(.5) brightness(.7);
+  transition: opacity .25s ease, filter .25s ease;
 }
-.mission-card .m-num { font-size: 10px; color: var(--muted); letter-spacing: .15em; }
-.mission-card .m-name { font-size: 17px; font-weight: 700; line-height: 1.2; letter-spacing: -.01em; }
-.mission-card .m-meta { margin-top: auto; font-size: 11px; color: var(--muted); }
+.mission-card .m-info {
+  position: relative; z-index: 1;
+  margin-top: auto;
+  padding: 14px 14px 12px;
+  background: linear-gradient(to top, rgba(0,0,0,.85) 0%, rgba(0,0,0,.55) 60%, transparent 100%);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.mission-card .m-num {
+  font-size: 10px; color: rgba(255,255,255,.5); letter-spacing: .15em;
+  text-transform: uppercase;
+}
+.mission-card .m-name {
+  font-size: 16px; font-weight: 700; line-height: 1.2; letter-spacing: -.01em;
+  color: #fff;
+}
+.mission-card .m-meta { font-size: 11px; color: rgba(255,255,255,.45); }
 
-.m-stats { display: flex; align-items: center; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+.m-stats { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
 .m-chip {
   font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
   padding: 3px 8px; border-radius: 4px;
-  background: rgba(240,180,41,.08); color: var(--amber);
-  border: 1px solid rgba(240,180,41,.2);
+  background: rgba(240,180,41,.12); color: var(--amber);
+  border: 1px solid rgba(240,180,41,.25);
 }
 .m-dots { display: flex; gap: 5px; }
 .m-dot {
   width: 6px; height: 6px; border-radius: 50%;
-  background: transparent; border: 1.5px solid var(--line);
+  background: transparent; border: 1.5px solid rgba(255,255,255,.2);
   transition: background-color .15s ease, border-color .15s ease;
 }
 .m-dot.on { background: var(--accent); border-color: var(--accent); }
-.m-chip.empty { background: rgba(160,160,160,.06); color: var(--muted); border-color: var(--line); }
+.m-chip.empty { background: rgba(160,160,160,.08); color: rgba(255,255,255,.4); border-color: rgba(255,255,255,.1); }
 
-.mission-card.available { padding-top: 32px; }
 .mission-card.available:hover {
-  background: var(--card-hover);
-  border-color: rgba(255,255,255,.1);
-  transform: translateY(-2px);
+  border-color: rgba(255,255,255,.15);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
 }
-.mission-card.available:hover .m-thumb { opacity: .12; }
-.mission-card.available::after {
-  content: "›"; position: absolute; right: 14px; top: 10px; color: var(--muted);
-  font-size: 18px; line-height: 1; opacity: .5;
-  transition: opacity .15s ease, color .15s ease;
-}
-.mission-card.available:hover::after { opacity: .8; color: var(--text); }
+.mission-card.available:hover .m-thumb { opacity: .55; filter: saturate(.6) brightness(.75); }
+.mission-card.available::after { content: none; }
 
 /* S-rank toggle */
 .srank-btn {
-  position: absolute; left: 7px; top: 5px; z-index: 1;
+  position: absolute; right: 8px; top: 8px; z-index: 2;
   width: 32px; height: 32px;
   display: flex; align-items: center; justify-content: center;
-  background: transparent; border: none; border-radius: 50%;
-  color: var(--muted);
+  background: rgba(0,0,0,.4); border: none; border-radius: 50%;
+  color: rgba(255,255,255,.5);
   font-size: 16px; line-height: 1; cursor: pointer;
-  transition: color .15s ease, transform .1s ease;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  transition: color .15s ease, transform .1s ease, background .15s ease;
 }
-.srank-btn:hover { color: var(--amber); }
+.srank-btn:hover { color: var(--amber); background: rgba(0,0,0,.6); }
 .srank-btn:active { transform: scale(.88); }
-.srank-btn.ranked { color: var(--amber); }
+.srank-btn.ranked { color: var(--amber); background: rgba(240,180,41,.15); }
 .mission-card.s-ranked { border-color: rgba(240,180,41,.3); }
 .mission-card.s-ranked:hover { border-color: rgba(240,180,41,.5); }
 
 .mission-card.locked {
   cursor: default;
-  background: var(--toolbar);
+  aspect-ratio: auto;
+  min-height: 80px;
   border-style: dashed;
   border-color: var(--line);
-  opacity: .5;
+  opacity: .4;
+  display: flex; align-items: center; justify-content: center;
 }
-.mission-card.locked .m-name { color: var(--muted); font-weight: 600; }
+.mission-card.locked .m-info { background: none; margin: 0; text-align: center; align-items: center; }
+.mission-card.locked .m-num { color: var(--muted); }
+.mission-card.locked .m-name { color: var(--muted); font-weight: 600; font-size: 14px; }
 .mission-card.locked::after {
-  content: "🔒"; position: absolute; right: 14px; top: 12px;
+  content: "🔒"; position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
   font-size: 12px; opacity: .5;
 }
 
@@ -832,8 +842,9 @@ body {
   .hint { font-size: 11px; }
   .install-btn { position: static; margin: 0; }
   .hub-top { flex-direction: column; gap: 8px; }
-  .mission-grid { gap: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-  .mission-card { min-height: 136px; }
+  .mission-grid { gap: 8px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .mission-card .m-name { font-size: 14px; }
+  .mission-card .m-info { padding: 10px 10px 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
