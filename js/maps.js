@@ -309,6 +309,14 @@ const MISSION_DATA = {
   },
 };
 
+const MISSION_GROUPS = [
+  { label: "Base Game",          from: 1,  to: 18 },
+  { label: "Home Invasion DLC",  from: 19, to: 21 },
+  { label: "Dark Waters DLC",    from: 22, to: 24 },
+  { label: "Los Suenos Stories", from: 25, to: 26 },
+  { label: "Boiling Point DLC",  from: 27, to: 29 },
+];
+
 // Build the full list of 29 mission slots. Slots without data show as "Coming soon".
 const MISSIONS = [];
 for (let n = 1; n <= TOTAL_MISSIONS; n++) {

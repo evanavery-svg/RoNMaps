@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.33";
+  const APP_VERSION = "0.34";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1127,6 +1127,7 @@
   // Hub (mission picker) + navigation
   // =========================================================================
   const hubCards = []; // [{ card, mission, available, metaEl }]
+  let hubGroups = [];  // [{ el, from, to }]
 
   // S rank: a personal "I cleared this perfectly" flag per mission, separate from the
   // tactical X/W/arrow/pen marks. Stored locally only — deliberately NOT included in
@@ -1154,7 +1155,19 @@
   function buildHub() {
     el.missionGrid.innerHTML = "";
     hubCards.length = 0;
+    hubGroups = [];
+    let groupIdx = 0;
     for (const mission of MISSIONS) {
+      // Insert group header before the first mission of each group
+      if (groupIdx < MISSION_GROUPS.length && mission.number === MISSION_GROUPS[groupIdx].from) {
+        const g = MISSION_GROUPS[groupIdx];
+        const hdr = document.createElement("div");
+        hdr.className = "mission-group-header";
+        hdr.textContent = g.label;
+        el.missionGrid.appendChild(hdr);
+        hubGroups.push({ el: hdr, from: g.from, to: g.to });
+        groupIdx++;
+      }
       const available = mission.maps.length > 0;
       // A real <button> can't legally contain the nested S-rank <button>, so available
       // cards are a div acting as a button (role + tabindex + click/keydown), matching
@@ -1267,15 +1280,23 @@
     const q = el.missionSearch.value.trim().toLowerCase();
     const hideSoon = el.hideComingSoon.checked;
     let shown = 0;
+    // Check if search matches a group label
+    const groupMatch = !q ? null : MISSION_GROUPS.find((g) => g.label.toLowerCase().includes(q));
     for (const hc of hubCards) {
       const matchesSearch = !q ||
         hc.mission.name.toLowerCase().includes(q) ||
         String(hc.mission.number) === q ||
-        ("mission " + hc.mission.number).includes(q);
+        ("mission " + hc.mission.number).includes(q) ||
+        (groupMatch && hc.mission.number >= groupMatch.from && hc.mission.number <= groupMatch.to);
       const passesToggle = !hideSoon || hc.available;
       const visible = matchesSearch && passesToggle;
       hc.card.hidden = !visible;
       if (visible) shown++;
+    }
+    for (const g of hubGroups) {
+      const hasVisible = hubCards.some((hc) =>
+        hc.mission.number >= g.from && hc.mission.number <= g.to && !hc.card.hidden);
+      g.el.hidden = !hasVisible;
     }
     el.hubEmpty.hidden = shown > 0;
   }
@@ -1763,7 +1784,8 @@
     updateLayerButtons();
     updateThemeButtons();   // the inline head script already applied the saved theme
     buildHub();
-    el.appFoot.textContent = "© Avery LLC · v" + APP_VERSION;
+    el.appFoot.innerHTML = "© Avery LLC · v" + APP_VERSION +
+      '<br><span class="foot-legal">© VOID Interactive. Ready or Not is a trademark of VOID Interactive. This is a fan-made project.</span>';
 
     el.railToggle.addEventListener("click", toggleRail);
     el.moreToggle.addEventListener("click", toggleMore);
