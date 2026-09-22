@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.35";
+  const APP_VERSION = "0.36";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1209,7 +1209,17 @@
       if (available) {
         const thumb = document.createElement("div");
         thumb.className = "m-thumb";
-        thumb.style.backgroundImage = "url('" + mission.maps[0].src + "')";
+        const thumbImg = new Image();
+        const thumbSrc = "thumbnails/mission-" + mission.number + ".png";
+        thumbImg.onload = () => { thumb.style.backgroundImage = "url('" + thumbSrc + "')"; };
+        thumbImg.onerror = () => {
+          const jpgSrc = "thumbnails/mission-" + mission.number + ".jpg";
+          const jpg = new Image();
+          jpg.onload = () => { thumb.style.backgroundImage = "url('" + jpgSrc + "')"; };
+          jpg.onerror = () => { thumb.style.backgroundImage = "url('" + mission.maps[0].src + "')"; };
+          jpg.src = jpgSrc;
+        };
+        thumbImg.src = thumbSrc;
         card.appendChild(thumb);
         info.appendChild(stats);
 
