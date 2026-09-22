@@ -26,7 +26,7 @@
 //     Marks are stored in that pixel space, so keep an image's size stable once you've marked on it.
 // ---------------------------------------------------------------------------
 
-const TOTAL_MISSIONS = 26;
+const TOTAL_MISSIONS = 29;
 
 const MISSION_DATA = {
   // Mission 1 — Thank You, Come Again. (Single sheet; white-background blueprint.)
@@ -237,6 +237,26 @@ const MISSION_DATA = {
       { id: "mirage-at-sea-floor-2", name: "Floor 2", src: "assets/maps/MirageAtSeaFloor2.png",  width: 3840, height: 2715 },
       { id: "mirage-at-sea-floor-3", name: "Floor 3", src: "assets/maps/MirageAtSeaFloor3.png",  width: 3840, height: 2715 },
       { id: "mirage-at-sea-floor-4", name: "Floor 4", src: "assets/maps/MirageAtSeaFloor4.png",  width: 3840, height: 2715 },
+    ],
+  },
+
+  // Mission 23 — Leviathan.
+  23: {
+    name: "Leviathan",
+    maps: [
+      { id: "leviathan-ground",  name: "Ground",  src: "assets/maps/LeviathanGround.png",  width: 3840, height: 2715 },
+      { id: "leviathan-floor-1", name: "Floor 1", src: "assets/maps/LeviathanFloor1.png",  width: 3840, height: 2715 },
+      { id: "leviathan-floor-2", name: "Floor 2", src: "assets/maps/LeviathanFloor2.png",  width: 3840, height: 2715 },
+      { id: "leviathan-floor-3", name: "Floor 3", src: "assets/maps/LeviathanFloor3.png",  width: 3840, height: 2715 },
+    ],
+  },
+
+  // Mission 24 — 3 Letter Triad.
+  24: {
+    name: "3 Letter Triad",
+    maps: [
+      { id: "3-letter-triad-ground",  name: "Ground",  src: "assets/maps/3LetterTriadGround.png",  width: 3840, height: 2715 },
+      { id: "3-letter-triad-floor-1", name: "Floor 1", src: "assets/maps/3LetterTriadFloor1.png",  width: 3840, height: 2715 },
     ],
   },
 
