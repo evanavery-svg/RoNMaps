@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.30";
+  const APP_VERSION = "0.31";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1459,6 +1459,41 @@
     el.scroller.scrollTo({ left, top, behavior: "auto" });
   }
 
+  // Ctrl+scroll (or trackpad pinch on desktop) zooms the map toward the cursor.
+  // iPad touch pinch uses the native visual viewport, so this only fires with a
+  // mouse/trackpad — exactly the "desktop only" behavior we want.
+  function onWheel(e) {
+    if (!e.ctrlKey || !state.mission) return;
+    const floor = floorFromEvent(e);
+    if (!floor) { e.preventDefault(); return; }
+    e.preventDefault();
+
+    if (!floor.map.width || !floor.map.height || !floor.fitWidth) return;
+
+    const rect = floor.img.getBoundingClientRect();
+    const imgPt = toImageRect(floor, rect, e.clientX, e.clientY);
+
+    const delta = -e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1);
+    const factor = Math.pow(1.002, delta);
+
+    const prevW = rect.width;
+    const fitW = floor.fitWidth;
+    const nextW = clamp(prevW * factor, fitW, fitW * 6);
+    if (Math.abs(nextW - prevW) < 1) return;
+
+    floor.wrap.style.width = Math.round(nextW) + "px";
+    floor.zoomed = nextW > fitW * 1.05;
+
+    if (floor.zoomed) el.scroller.classList.add("zoomed");
+    else if (!state.floors.some((f) => f.zoomed)) el.scroller.classList.remove("zoomed");
+
+    const newRect = floor.img.getBoundingClientRect();
+    const newX = newRect.left + (imgPt.x / floor.map.width) * newRect.width;
+    const newY = newRect.top + (imgPt.y / floor.map.height) * newRect.height;
+    el.scroller.scrollLeft += (newX - e.clientX);
+    el.scroller.scrollTop += (newY - e.clientY);
+  }
+
   // Keep the left rail glued to the VISUAL viewport so it stays on screen (and a
   // constant size) while the page is pinch-zoomed — otherwise a fixed element gets
   // left behind in the layout viewport and scrolls out of view when you zoom in.
@@ -1764,6 +1799,7 @@
     el.scroller.addEventListener("pointerup", onPointerUp);
     el.scroller.addEventListener("pointercancel", onPointerCancel);
     el.scroller.addEventListener("contextmenu", (e) => e.preventDefault());
+    el.scroller.addEventListener("wheel", onWheel, { passive: false });
 
     // Keep the left rail pinned to the visual viewport during pinch-zoom.
     setupViewportPin();
@@ -1788,6 +1824,8 @@
       else if (e.key === "1") toggleLayer("stamp");
       else if (e.key === "2") toggleLayer("arrow");
       else if (e.key === "3") toggleLayer("pen");
+      else if (e.key === "ArrowUp") { e.preventDefault(); jumpToFloor(state.activeIndex - 1); }
+      else if (e.key === "ArrowDown") { e.preventDefault(); jumpToFloor(state.activeIndex + 1); }
       else if ((e.key === "Delete" || e.key === "Backspace") && state.selectedId) {
         e.preventDefault();
         deleteMarker(selectedFloor(), state.selectedId);
