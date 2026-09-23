@@ -1,12 +1,12 @@
 /* RoN Maps — marker tool.
  * Vanilla JS. A mission's floors are stacked in one native vertical scroll; the browser
- * handles scrolling between floors and pinch/ctrl-wheel zoom. Our only custom gesture is a
- * TAP (stamp / select). Markers are SVG objects stored in image-pixel coordinates so they
+ * handles scrolling between floors. Pinch and ctrl-wheel zoom resize a single floor (the
+ * page itself never zooms, so the rail stays fixed). Taps stamp / select. Markers are SVG objects stored in image-pixel coordinates so they
  * stay locked to the map across screen sizes, zoom, and devices. */
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.40";
+  const APP_VERSION = "0.41";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -588,6 +588,11 @@
   }
 
   function onPointerDown(e) {
+    if (e.pointerType === "touch") {
+      touchPointers.add(e.pointerId);
+      // a second finger means a pinch is starting — never let it become a tap/stamp
+      if (touchPointers.size > 1 || pinch) { abortPressForPinch(); return; }
+    }
     const floor = floorFromEvent(e);
     if (!floor) { press = null; return; }
 
@@ -1501,7 +1506,7 @@
     el.stage.classList.add("rail-anim");
     applyRailState(collapsed);
     try { localStorage.setItem(STORAGE_PREFIX + "rail", collapsed ? "1" : "0"); } catch (e) {}
-    if (state.mission) { layoutFloors(); pinRail(); }
+    if (state.mission) layoutFloors();
     clearTimeout(toggleRail._t);
     toggleRail._t = setTimeout(() => {
       el.toolbar.classList.remove("rail-anim");
@@ -1585,7 +1590,6 @@
     applyRailState(isRailCollapsed());
     playEnter(el.toolbar);
     if (!inViewTransition) playEnter(el.stage);
-    pinRail();
     buildFloors(mission);
     buildFloorNav(mission);
     layoutFloors();
@@ -1737,34 +1741,167 @@
     el.scroller.scrollTop += (newY - e.clientY);
   }
 
-  // Keep the left rail glued to the VISUAL viewport so it stays on screen (and a
-  // constant size) while the page is pinch-zoomed — otherwise a fixed element gets
-  // left behind in the layout viewport and scrolls out of view when you zoom in.
-  // visualViewport fires a burst of events during a pinch. Writing style.transform on
-  // each one thrashes style recalc on the main thread and the rail visibly swims, so
-  // coalesce into a single write per frame and skip no-op writes.
-  let pinRaf = 0, lastPinX = -1, lastPinY = -1, lastPinS = -1;
+  // =========================================================================
+  // Pinch zoom — the MAP zooms, never the page.
+  // Letting the browser pinch-zoom the whole page meant the fixed rail had to be
+  // chased with JS from late, bursty visualViewport events, so it swam around. Page
+  // zoom is now blocked (touch-action + iOS gesture events) and a pinch scales just
+  // the floor under the fingers: a GPU transform while fingers are down, then one
+  // real width change + scroll on release (like ctrl+wheel), so the rail stays put.
+  // =========================================================================
+  let pinch = null;
+  const touchPointers = new Set();
 
-  function pinRail() {
-    if (pinRaf) return;
-    pinRaf = requestAnimationFrame(applyPin);
+  function abortPressForPinch() {
+    clearLongPress();
+    if (press) {
+      if (press.kind === "draw") clearDraft(press.floor);
+      else if (press.kind === "resize" && press.changed) { flushGesture(); commitResize(press); }
+      else if (press.kind === "move" && press.moved) { flushGesture(); commitDrag(press); }
+    }
+    press = null;
+    lastTap = null;
   }
-  function applyPin() {
-    pinRaf = 0;
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const x = Math.round(vv.offsetLeft), y = Math.round(vv.offsetTop);
-    const s = Math.round(10000 / vv.scale) / 10000;
-    if (x === lastPinX && y === lastPinY && s === lastPinS) return;
-    lastPinX = x; lastPinY = y; lastPinS = s;
-    el.toolbar.style.transform = "translate3d(" + x + "px," + y + "px,0) scale(" + s + ")";
+
+  function beginPinch(floor, cx, cy) {
+    if (!floor || !floor.map.width || !floor.fitWidth) return false;
+    abortPressForPinch();
+    const rect = floor.wrap.getBoundingClientRect();
+    pinch = {
+      floor, cx0: cx, cy0: cy, cx, cy, k: 1, raf: 0,
+      w0: rect.width,
+      imgPt: toImageRect(floor, floor.img.getBoundingClientRect(), cx, cy),
+      sl0: el.scroller.scrollLeft, st0: el.scroller.scrollTop,
+    };
+    clearTimeout(floor.zoomTimer);
+    floor.wrap.style.transition = "none";
+    floor.wrap.style.transformOrigin = (cx - rect.left) + "px " + (cy - rect.top) + "px";
+    floor.wrap.style.willChange = "transform";
+    floor.wrap.classList.add("pinching");
+    el.scroller.classList.add("pinching");   // freezes native panning mid-pinch
+    return true;
   }
-  function setupViewportPin() {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    vv.addEventListener("resize", pinRail, { passive: true });
-    vv.addEventListener("scroll", pinRail, { passive: true });
-    applyPin();
+
+  function updatePinch(k, cx, cy) {
+    const p = pinch;
+    const lo = p.floor.fitWidth / p.w0, hi = (p.floor.fitWidth * 6) / p.w0;
+    // past the limits the map resists (rubber band) and settles back on release
+    if (k < lo) k = lo * Math.pow(k / lo, 0.35);
+    else if (k > hi) k = hi * Math.pow(k / hi, 0.35);
+    p.k = k; p.cx = cx; p.cy = cy;
+    if (!p.raf) p.raf = requestAnimationFrame(applyPinchFrame);
+  }
+  function applyPinchFrame() {
+    const p = pinch;
+    if (!p) return;
+    p.raf = 0;
+    // follow the fingers; compensate if the scroller still moved underneath us
+    const tx = p.cx - p.cx0 + (el.scroller.scrollLeft - p.sl0);
+    const ty = p.cy - p.cy0 + (el.scroller.scrollTop - p.st0);
+    p.floor.wrap.style.transform = "translate3d(" + tx + "px," + ty + "px,0) scale(" + p.k + ")";
+  }
+
+  function endPinch() {
+    const p = pinch;
+    if (!p) return;
+    pinch = null;
+    if (p.raf) cancelAnimationFrame(p.raf);
+    const f = p.floor, fit = f.fitWidth;
+    const shownW = p.w0 * p.k;
+    const nextW = clamp(shownW, fit, fit * 6);
+
+    // Commit in one synchronous pass (no paint in between): real width, then scroll
+    // so the pinched spot sits under where the fingers ended.
+    el.scroller.classList.remove("pinching");
+    f.wrap.classList.remove("pinching");
+    f.wrap.style.transform = "";
+    f.wrap.style.width = Math.round(nextW) + "px";
+    f.zoomed = nextW > fit * 1.02;
+    if (f.zoomed) el.scroller.classList.add("zoomed");
+    else if (!state.floors.some((x) => x.zoomed)) el.scroller.classList.remove("zoomed");
+
+    let r = f.img.getBoundingClientRect();
+    el.scroller.scrollLeft += r.left + (p.imgPt.x / f.map.width) * r.width - p.cx;
+    el.scroller.scrollTop += r.top + (p.imgPt.y / f.map.height) * r.height - p.cy;
+
+    // FLIP from what was on screen to the committed layout, so an overshoot (or a
+    // scroll that hit an edge) glides into place instead of snapping.
+    r = f.img.getBoundingClientRect();
+    const px = r.left + (p.imgPt.x / f.map.width) * r.width;
+    const py = r.top + (p.imgPt.y / f.map.height) * r.height;
+    const ratio = shownW / r.width;
+    const dx = p.cx - px, dy = p.cy - py;
+    if (reducedMotion() || (Math.abs(ratio - 1) < 0.005 && Math.abs(dx) < 1 && Math.abs(dy) < 1)) {
+      f.wrap.style.transition = "";
+      f.wrap.style.willChange = "";
+      return;
+    }
+    const wr = f.wrap.getBoundingClientRect();
+    f.wrap.style.transformOrigin = (px - wr.left) + "px " + (py - wr.top) + "px";
+    f.wrap.style.transform = "translate3d(" + dx + "px," + dy + "px,0) scale(" + ratio + ")";
+    requestAnimationFrame(() => {
+      f.wrap.style.transition = "transform .3s cubic-bezier(.22,1,.36,1)";
+      f.wrap.style.transform = "";
+    });
+    clearTimeout(f.zoomTimer);
+    f.zoomTimer = setTimeout(() => {
+      f.wrap.style.transition = "";
+      f.wrap.style.willChange = "";
+    }, 340);
+  }
+
+  function floorAtPoint(x, y, fallback) {
+    const hit = document.elementFromPoint(x, y);
+    const sec = (hit && hit.closest && hit.closest(".floor-section")) ||
+                (fallback && fallback.closest && fallback.closest(".floor-section"));
+    return sec ? state.floors[Number(sec.dataset.index)] || null : null;
+  }
+  const touchDist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
+
+  function onPinchTouchStart(e) {
+    if (pinch || e.touches.length !== 2 || !state.mission) return;
+    const [a, b] = e.touches;
+    const cx = (a.clientX + b.clientX) / 2, cy = (a.clientY + b.clientY) / 2;
+    if (!beginPinch(floorAtPoint(cx, cy, e.target), cx, cy)) return;
+    pinch.d0 = touchDist(a, b);
+    window.addEventListener("touchmove", onPinchTouchMove, { passive: false });
+  }
+  function onPinchTouchMove(e) {
+    if (!pinch) return;
+    if (e.cancelable) e.preventDefault();
+    if (e.touches.length < 2) return;
+    const [a, b] = e.touches;
+    updatePinch(touchDist(a, b) / pinch.d0, (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2);
+  }
+  function onPinchTouchEnd(e) {
+    if (!pinch || e.touches.length >= 2) return;
+    window.removeEventListener("touchmove", onPinchTouchMove);
+    endPinch();
+  }
+
+  function setupPinchZoom() {
+    el.scroller.addEventListener("touchstart", onPinchTouchStart, { passive: true });
+    el.scroller.addEventListener("touchend", onPinchTouchEnd, { passive: true });
+    el.scroller.addEventListener("touchcancel", onPinchTouchEnd, { passive: true });
+
+    const block = (e) => e.preventDefault();
+    if (navigator.maxTouchPoints > 0) {
+      // iPad/iPhone: Safari's own page zoom is driven by gesture events — cancel it.
+      for (const t of ["gesturestart", "gesturechange", "gestureend"]) {
+        document.addEventListener(t, block, { passive: false });
+      }
+    } else {
+      // Mac Safari trackpad pinch arrives as gesture events (Chrome sends ctrl+wheel).
+      el.scroller.addEventListener("gesturestart", (e) => {
+        e.preventDefault();
+        if (!pinch && state.mission) beginPinch(floorAtPoint(e.clientX, e.clientY, e.target), e.clientX, e.clientY);
+      }, { passive: false });
+      el.scroller.addEventListener("gesturechange", (e) => {
+        e.preventDefault();
+        if (pinch) updatePinch(e.scale, pinch.cx0, pinch.cy0);
+      }, { passive: false });
+      el.scroller.addEventListener("gestureend", (e) => { e.preventDefault(); endPinch(); }, { passive: false });
+    }
   }
 
   // =========================================================================
@@ -2045,11 +2182,13 @@
     el.scroller.addEventListener("contextmenu", (e) => e.preventDefault());
     el.scroller.addEventListener("wheel", onWheel, { passive: false });
 
-    // Keep the left rail pinned to the visual viewport during pinch-zoom.
-    setupViewportPin();
+    setupPinchZoom();
+    const dropTouch = (e) => touchPointers.delete(e.pointerId);
+    window.addEventListener("pointerup", dropTouch, true);
+    window.addEventListener("pointercancel", dropTouch, true);
 
     // Re-fit floors when the screen changes (e.g. rotating the iPad).
-    const relayout = () => { if (state.mission) { layoutFloors(); pinRail(); } };
+    const relayout = () => { if (state.mission) layoutFloors(); };
     window.addEventListener("resize", relayout);
     window.addEventListener("orientationchange", () => setTimeout(relayout, 250));
 

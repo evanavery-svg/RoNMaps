@@ -103,6 +103,9 @@
 .mission-card:focus-visible { outline-offset: 3px; }
 [hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
+/* No browser page-zoom (pinch or double-tap): the app zooms the map itself, which keeps
+   the fixed rail rock-steady. Panning/scrolling is unaffected. */
+html, body { touch-action: pan-x pan-y; }
 body {
   font-family: -apple-system, "SF Pro Display", system-ui, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
@@ -503,9 +506,7 @@ body.hub-ready .hub-title { animation: title-shine 1.5s .45s cubic-bezier(.4,0,.
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  transform-origin: 0 0;
-  will-change: transform;
-  backface-visibility: hidden;
+  overscroll-behavior: contain;
   contain: layout paint;
 }
 .toolbar.rail-anim { transition: width .25s ease; }
@@ -841,7 +842,10 @@ body.hub-ready .hub-title { animation: title-shine 1.5s .45s cubic-bezier(.4,0,.
   margin: 0 auto;
   background: #fff;
 }
-.floor-scroll.zoomed { overflow-x: auto; }
+.floor-scroll.zoomed { overflow-x: auto; scroll-snap-type: none; }
+/* mid-pinch: freeze native panning; the pinched floor floats above its neighbours */
+.floor-scroll.pinching { overflow: hidden !important; scroll-snap-type: none; }
+.floor-wrap.pinching { z-index: 2; }
 .floor-scroll.drawing .floor-section { touch-action: none; }
 .floor-scroll.drawing { cursor: crosshair; }
 .map-img {
