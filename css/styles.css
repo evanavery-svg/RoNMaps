@@ -115,6 +115,14 @@ body {
 }
 .hub, .toolbar, .stage, .modal, .splash { position: relative; z-index: 1; }
 
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.22); }
+:root[data-theme="day"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.12); }
+:root[data-theme="day"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,.22); }
+
 /* ---- Hub ---- */
 .hub {
   flex: 1 1 auto;
@@ -122,6 +130,8 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: max(24px, env(safe-area-inset-top)) 20px 40px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.12) transparent;
 }
 .hub-head { text-align: center; margin: 8px auto 24px; max-width: 960px; }
 .hub-top { display: flex; align-items: center; justify-content: center; gap: 12px; position: relative; }
@@ -142,11 +152,20 @@ body {
   transition: color .15s ease, background .15s ease;
 }
 .settings-btn:hover { color: var(--text); background: var(--card-hover); }
+.settings-btn.open { color: var(--accent); }
+@keyframes gear-spin { from { transform: translateY(-50%) rotate(0); } to { transform: translateY(-50%) rotate(90deg); } }
+.settings-btn.spin { animation: gear-spin .3s cubic-bezier(.22,.61,.36,1); }
 .settings-dropdown {
   position: absolute; right: 0; top: 100%; margin-top: 6px;
   background: var(--toolbar); border: 1px solid var(--line);
   border-radius: var(--r); padding: 8px; z-index: 10;
   box-shadow: 0 8px 24px var(--shadow);
+  transform-origin: top right;
+  animation: dropdown-in .18s cubic-bezier(.22,.61,.36,1);
+}
+@keyframes dropdown-in {
+  from { opacity: 0; transform: scale(.92) translateY(-4px); }
+  to   { opacity: 1; transform: none; }
 }
 .hub-controls {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -160,7 +179,7 @@ body {
   font-size: 15px;
   transition: border-color .15s ease;
 }
-.mission-search:focus { outline: none; border-color: var(--accent); }
+.mission-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--glow); }
 .mission-search::placeholder { color: var(--muted); }
 
 .hub-empty { text-align: center; color: var(--muted); margin: 24px 0; }
@@ -198,8 +217,14 @@ body {
   letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--muted);
-  padding: 18px 0 2px;
+  padding: 18px 0 6px;
   border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px;
+}
+.mission-group-header::before {
+  content: ""; display: block;
+  width: 3px; height: 14px; border-radius: 2px;
+  background: var(--accent); flex-shrink: 0;
 }
 .mission-group-header:first-child { padding-top: 0; }
 .mission-card {
@@ -216,20 +241,20 @@ body {
   text-align: left;
   cursor: pointer;
   font: inherit;
-  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+  transition: border-color .2s ease, transform .25s cubic-bezier(.22,.61,.36,1), box-shadow .25s ease;
 }
 .mission-card .m-thumb {
   position: absolute; inset: 0; z-index: 0;
   background-size: cover; background-position: center 25%;
-  opacity: .35;
-  filter: saturate(.5) brightness(.7);
-  transition: opacity .25s ease, filter .25s ease;
+  opacity: .45;
+  filter: saturate(.55) brightness(.75);
+  transition: opacity .35s ease, filter .35s ease, transform .45s cubic-bezier(.22,.61,.36,1);
 }
 .mission-card .m-info {
   position: relative; z-index: 1;
   margin-top: auto;
-  padding: 14px 14px 12px;
-  background: linear-gradient(to top, rgba(0,0,0,.85) 0%, rgba(0,0,0,.55) 60%, transparent 100%);
+  padding: 16px 14px 12px;
+  background: linear-gradient(to top, rgba(0,0,0,.88) 0%, rgba(0,0,0,.6) 50%, rgba(0,0,0,.15) 80%, transparent 100%);
   display: flex; flex-direction: column; gap: 4px;
 }
 .mission-card .m-num {
@@ -259,11 +284,12 @@ body {
 .m-chip.empty { background: rgba(160,160,160,.08); color: rgba(255,255,255,.4); border-color: rgba(255,255,255,.1); }
 
 .mission-card.available:hover {
-  border-color: rgba(255,255,255,.15);
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  border-color: rgba(255,255,255,.18);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.06);
 }
-.mission-card.available:hover .m-thumb { opacity: .55; filter: saturate(.6) brightness(.75); }
+.mission-card.available:hover .m-thumb { opacity: .65; filter: saturate(.7) brightness(.8); transform: scale(1.04); }
+.mission-card.available:active { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.3); transition-duration: .08s; }
 .mission-card.available::after { content: none; }
 
 /* S-rank toggle */
@@ -457,7 +483,7 @@ body {
   transition: background-color .15s ease, color .15s ease, border-color .15s ease;
 }
 .floor-pill:hover { background: rgba(255,255,255,.04); color: var(--text); }
-.floor-pill:active { transform: scale(.96); }
+.floor-pill:active { transform: scale(.95); transition-duration: .08s; }
 .floor-pill.active {
   background: var(--accent); border-color: var(--accent); color: var(--on-accent);
 }
@@ -697,7 +723,9 @@ body {
   pointer-events: none;
   max-width: 92%;
   text-align: center;
-  transition: opacity .2s ease;
+  transition: opacity .3s ease;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0,0,0,.2);
 }
 
 /* ---- Splash ---- */
@@ -714,23 +742,26 @@ body {
   font-size: clamp(22px, 5vw, 34px);
   font-weight: 700; letter-spacing: .32em; text-indent: .32em;
   color: var(--text);
-  animation: splash-up .5s cubic-bezier(.22,.61,.36,1) backwards;
+  animation: splash-up .6s cubic-bezier(.22,.61,.36,1) backwards;
 }
 .splash-rule {
   height: 2px; margin: 16px auto 12px; width: 0;
-  background: var(--accent);
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
   border-radius: 1px;
-  animation: rule-grow .5s .12s cubic-bezier(.22,.61,.36,1) forwards;
+  animation: rule-grow .6s .15s cubic-bezier(.22,.61,.36,1) forwards;
 }
-@keyframes splash-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-@keyframes rule-grow { to { width: 160px; } }
+@keyframes splash-up {
+  from { opacity: 0; transform: translateY(14px); letter-spacing: .5em; }
+  to   { opacity: 1; transform: none; letter-spacing: .32em; }
+}
+@keyframes rule-grow { to { width: 180px; } }
 
 /* ---- Screen transitions ---- */
-@keyframes screen-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes rail-in  { from { opacity: 0; translate: -12px 0; } to { opacity: 1; translate: none; } }
-.hub.entering { animation: screen-in .3s cubic-bezier(.22,.61,.36,1); }
-.stage.entering { animation: screen-in .3s cubic-bezier(.22,.61,.36,1); }
-.toolbar.entering { animation: rail-in .3s cubic-bezier(.22,.61,.36,1); }
+@keyframes screen-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes rail-in  { from { opacity: 0; translate: -16px 0; } to { opacity: 1; translate: none; } }
+.hub.entering { animation: screen-in .35s cubic-bezier(.22,.61,.36,1); }
+.stage.entering { animation: screen-in .35s cubic-bezier(.22,.61,.36,1); }
+.toolbar.entering { animation: rail-in .35s cubic-bezier(.22,.61,.36,1); }
 
 /* ---- Modal / Share ---- */
 .modal {
@@ -763,14 +794,17 @@ body {
 }
 
 /* ---- Entrance animations ---- */
-@keyframes card-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.mission-card { animation: card-in .3s cubic-bezier(.22,.61,.36,1) backwards; }
-.mission-card:nth-child(1){animation-delay:.02s}   .mission-card:nth-child(2){animation-delay:.04s}
-.mission-card:nth-child(3){animation-delay:.06s}   .mission-card:nth-child(4){animation-delay:.08s}
-.mission-card:nth-child(5){animation-delay:.10s}   .mission-card:nth-child(6){animation-delay:.12s}
-.mission-card:nth-child(7){animation-delay:.14s}   .mission-card:nth-child(8){animation-delay:.16s}
-.mission-card:nth-child(9){animation-delay:.18s}   .mission-card:nth-child(10){animation-delay:.20s}
-.mission-card:nth-child(n+11){animation-delay:.22s}
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(16px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+.mission-card { animation: card-in .4s cubic-bezier(.22,.61,.36,1) backwards; }
+.mission-card:nth-child(1){animation-delay:.03s}   .mission-card:nth-child(2){animation-delay:.06s}
+.mission-card:nth-child(3){animation-delay:.09s}   .mission-card:nth-child(4){animation-delay:.12s}
+.mission-card:nth-child(5){animation-delay:.14s}   .mission-card:nth-child(6){animation-delay:.16s}
+.mission-card:nth-child(7){animation-delay:.18s}   .mission-card:nth-child(8){animation-delay:.20s}
+.mission-card:nth-child(9){animation-delay:.22s}   .mission-card:nth-child(10){animation-delay:.24s}
+.mission-card:nth-child(n+11){animation-delay:.26s}
 
 @keyframes floor-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .floor-section { animation: floor-in .3s cubic-bezier(.22,.61,.36,1) backwards; }

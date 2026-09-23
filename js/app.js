@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.38";
+  const APP_VERSION = "0.39";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1857,11 +1857,20 @@
 
     // Settings dropdown toggle
     el.settingsBtn.addEventListener("click", () => {
-      el.settingsDropdown.hidden = !el.settingsDropdown.hidden;
+      const opening = el.settingsDropdown.hidden;
+      el.settingsDropdown.hidden = !opening;
+      el.settingsBtn.classList.toggle("open", opening);
+      if (opening) {
+        el.settingsBtn.classList.remove("spin");
+        void el.settingsBtn.offsetWidth;
+        el.settingsBtn.classList.add("spin");
+      }
     });
     document.addEventListener("click", (e) => {
-      if (!el.settingsBtn.contains(e.target) && !el.settingsDropdown.contains(e.target))
+      if (!el.settingsBtn.contains(e.target) && !el.settingsDropdown.contains(e.target)) {
         el.settingsDropdown.hidden = true;
+        el.settingsBtn.classList.remove("open");
+      }
     });
 
     setupPwaPolish();
