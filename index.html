@@ -31,18 +31,21 @@
     </div>
   </div>
 
+  <div class="ambient" aria-hidden="true"></div>
+
   <!-- ===================== HUB (mission picker) ===================== -->
   <section class="hub" id="hub">
     <header class="hub-head">
       <div class="hub-top">
         <h1 class="hub-title">Ready or Not Maps</h1>
-        <button class="settings-btn" id="settingsBtn" type="button" title="Settings" aria-label="Settings">⚙</button>
-      </div>
-      <div class="settings-dropdown" id="settingsDropdown" hidden>
-        <div class="theme-seg" id="themeSeg" role="group" aria-label="Theme">
-          <button type="button" data-theme-val="tactical" title="Tactical — the default dark briefing look">Tactical</button>
-          <button type="button" data-theme-val="night" title="Night Ops — for a dark room; also dims the blueprint">Night</button>
-          <button type="button" data-theme-val="day" title="Daylight — light UI for a bright room">Day</button>
+        <button class="settings-btn" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><span class="gear">⚙</span></button>
+        <div class="settings-dropdown" id="settingsDropdown" hidden>
+          <div class="theme-seg" id="themeSeg" role="group" aria-label="Theme">
+            <span class="seg-thumb" aria-hidden="true"></span>
+            <button type="button" data-theme-val="tactical" title="Tactical — the default dark briefing look">Tactical</button>
+            <button type="button" data-theme-val="night" title="Night Ops — for a dark room; also dims the blueprint">Night</button>
+            <button type="button" data-theme-val="day" title="Daylight — light UI for a bright room">Day</button>
+          </div>
         </div>
       </div>
       <div class="hub-controls">

@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.39";
+  const APP_VERSION = "0.40";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -153,21 +153,24 @@
     if (!f || !f.undoStack.length) return;
     f.redoStack.push(JSON.stringify(f.markers));
     applySnapshot(f, f.undoStack.pop());
+    nudge(el.undoBtn, "kick-back");
   }
   function redo() {
     const f = activeFloor();
     if (!f || !f.redoStack.length) return;
     f.undoStack.push(JSON.stringify(f.markers));
     applySnapshot(f, f.redoStack.pop());
+    nudge(el.redoBtn, "kick-fwd");
   }
   function applySnapshot(f, snap) {
     let markers; try { markers = JSON.parse(snap); } catch (e) { markers = []; }
+    const prev = f.markers;
     f.markers = markers;
     if (state.selectedIndex === indexOf(f) && !f.markers.some((m) => m.id === state.selectedId)) {
       clearSelection();
     }
     saveFloor(f);
-    renderFloor(f);
+    renderFloorDiff(f, prev);
     updateButtons();
     updateSizeGroup();
   }
@@ -197,10 +200,10 @@
 
   // Expanding ring at the stamp point. It's a throwaway node — removed when the
   // animation ends so it can never accumulate in the overlay.
-  function spawnPulse(floor, x, y, color) {
+  function spawnPulse(floor, x, y, color, cls) {
     if (reducedMotion()) return;
     const c = document.createElementNS(SVGNS, "circle");
-    c.setAttribute("class", "stamp-pulse");
+    c.setAttribute("class", cls || "stamp-pulse");
     c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", 4);
     c.setAttribute("stroke", color);
     const kill = () => c.remove();
@@ -212,12 +215,37 @@
     const i = floor.markers.findIndex((m) => m.id === id);
     if (i < 0) return;
     pushUndo(floor);
-    floor.markers.splice(i, 1);
+    const prev = floor.markers.slice();
+    const gone = floor.markers.splice(i, 1)[0];
     if (state.selectedId === id) clearSelection();
     saveFloor(floor);
-    renderFloor(floor);
+    renderFloorDiff(floor, prev);
     updateSizeGroup();
     buzz([10, 30, 10]);
+    if (isStamp(gone)) spawnPulse(floor, gone.x, gone.y, "#fff", "erase-pulse");
+  }
+
+  // Re-render a floor, animating marks that appeared (pop/draw in) and marks that
+  // vanished (a throwaway "ghost" copy of the old node shrinks away).
+  let enterIds = null;
+  function renderFloorDiff(floor, prevMarkers) {
+    if (reducedMotion()) { renderFloor(floor); return; }
+    const nowIds = new Set(floor.markers.map((m) => m.id));
+    const prevIds = new Set(prevMarkers.map((m) => m.id));
+    const ghosts = [];
+    for (const node of floor.svg.querySelectorAll(":scope > .mark")) {
+      if (!nowIds.has(node.dataset.id)) ghosts.push(node);
+    }
+    enterIds = new Set(floor.markers.filter((m) => !prevIds.has(m.id)).map((m) => m.id));
+    renderFloor(floor);
+    enterIds = null;
+    ghosts.forEach((g, i) => {
+      g.querySelectorAll(".sel-box, .sel-handle").forEach((n) => n.remove());
+      g.setAttribute("class", "mark mark-ghost");
+      g.style.animationDelay = Math.min(i * 30, 360) + "ms";
+      floor.svg.appendChild(g);
+      setTimeout(() => g.remove(), 520 + Math.min(i * 30, 360));
+    });
   }
   function buzz(pattern) { try { navigator.vibrate && navigator.vibrate(pattern); } catch (e) {} }
   // Reset clears every floor in the mission (not just the one in view).
@@ -228,10 +256,12 @@
     const snapshots = toClear.map((f) => ({ floor: f, markers: f.markers }));
     for (const f of toClear) {
       pushUndo(f);   // keeps per-floor Undo/Redo consistent too
+      const prev = f.markers;
       f.markers = [];
       saveFloor(f);
-      renderFloor(f);
+      renderFloorDiff(f, prev);
     }
+    nudge(el.resetBtn, "shake");
     if (state.selectedIndex >= 0 && toClear.includes(state.floors[state.selectedIndex])) {
       clearSelection();
     }
@@ -245,9 +275,10 @@
   function undoResetAll(snapshots) {
     for (const { floor, markers } of snapshots) {
       if (floor.undoStack.length) floor.undoStack.pop(); // remove the snapshot reset() pushed
+      const prev = floor.markers;
       floor.markers = markers;
       saveFloor(floor);
-      renderFloor(floor);
+      renderFloorDiff(floor, prev);
     }
     updateButtons();
     updateSizeGroup();
@@ -321,7 +352,7 @@
   function buildMarker(m, selected) {
     const g = document.createElementNS(SVGNS, "g");
     // `.placing` plays the entrance animation once, for a mark that was just created
-    const placing = m.id === justPlacedId;
+    const placing = m.id === justPlacedId || (enterIds !== null && enterIds.has(m.id));
     const kind = (m.type === "arrow" || m.type === "pen") ? m.type : "stamp";
     g.setAttribute("class", "mark mark-" + kind +
       (selected ? " selected" : "") + (placing ? " placing" : ""));
@@ -889,9 +920,26 @@
     if (i < 0 || i >= state.floors.length) return;
     state.activeIndex = i;
     state.floors.forEach((f, idx) => f.section.classList.toggle("active", idx === i));
-    const pills = el.floorNav.children;
+    const pills = el.floorNav.querySelectorAll(".floor-pill");
     for (let k = 0; k < pills.length; k++) pills[k].classList.toggle("active", k === i);
+    movePillThumb();
     updateButtons();
+  }
+
+  // The active-floor highlight is one element that glides between pills.
+  function movePillThumb() {
+    const thumb = el.floorNav.querySelector(".pill-thumb");
+    const pill = el.floorNav.querySelector(".floor-pill.active");
+    if (!thumb || !pill || !pill.offsetHeight) return;
+    const first = !thumb.classList.contains("placed");
+    if (first) thumb.style.transition = "none";
+    thumb.style.transform = "translateY(" + pill.offsetTop + "px)";
+    thumb.style.height = pill.offsetHeight + "px";
+    if (first) {
+      void thumb.offsetWidth;
+      thumb.style.transition = "";
+      thumb.classList.add("placed");
+    }
   }
 
   // =========================================================================
@@ -1012,15 +1060,30 @@
 
   function cycleTheme() {
     const next = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
-    setTheme(next);
+    setThemeAnimated(next, ...centerOf(el.themeCycleBtn));
     toast(THEME_LABEL[next] + " theme");
   }
 
   function updateThemeButtons() {
     const t = currentTheme();
     if (el.themeSeg) {
-      for (const b of el.themeSeg.children) {
-        b.classList.toggle("active", b.dataset.themeVal === t);
+      let active = null;
+      for (const b of el.themeSeg.querySelectorAll("[data-theme-val]")) {
+        const on = b.dataset.themeVal === t;
+        b.classList.toggle("active", on);
+        if (on) active = b;
+      }
+      const thumb = el.themeSeg.querySelector(".seg-thumb");
+      if (thumb && active && active.offsetWidth) {
+        const first = !thumb.classList.contains("placed");
+        if (first) thumb.style.transition = "none";
+        thumb.style.transform = "translateX(" + active.offsetLeft + "px)";
+        thumb.style.width = active.offsetWidth + "px";
+        if (first) {
+          void thumb.offsetWidth;
+          thumb.style.transition = "";
+          thumb.classList.add("placed");
+        }
       }
     }
     if (el.themeCycleLabel) el.themeCycleLabel.textContent = THEME_LABEL[t];
@@ -1063,7 +1126,11 @@
     el.scroller.classList.toggle("stamp-cursor", tool === "stamp" || tool === "eraser");
     updateToolButtons();
     updateSizeGroup();
-    el.hint.textContent = HINTS[tool] || HINTS.stamp;
+    const hint = HINTS[tool] || HINTS.stamp;
+    if (el.hint.textContent !== hint) {
+      el.hint.textContent = hint;
+      nudge(el.hint, "swap");
+    }
   }
 
   // Highlight the active tool: X/W while stamping, else Arrow, Pen, or Eraser.
@@ -1208,7 +1275,15 @@
       if (available) {
         const thumb = document.createElement("div");
         thumb.className = "m-thumb";
-        thumb.style.backgroundImage = "url('thumbnails/" + mission.number + ".webp')";
+        const src = "thumbnails/" + mission.number + ".webp";
+        thumb.style.backgroundImage = "url('" + src + "')";
+        card.classList.add("thumb-pending");
+        const pre = new Image();
+        pre.onload = pre.onerror = () => {
+          thumb.classList.add("loaded");
+          card.classList.remove("thumb-pending");
+        };
+        pre.src = src;
         card.appendChild(thumb);
         info.appendChild(stats);
 
@@ -1223,12 +1298,14 @@
           setSRank(mission, ranked);
           buzz(ranked ? [12, 40, 12] : 10);
           if (hc) applySRankUI(hc);
+          nudge(srankBtn, ranked ? "burst" : "unrank");
+          if (ranked) nudge(card, "ranked-glow");
         });
         card.appendChild(srankBtn);
 
-        card.addEventListener("click", () => openMission(mission));
+        card.addEventListener("click", () => goMission(mission, card));
         card.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openMission(mission); }
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goMission(mission, card); }
         });
       }
       card.appendChild(info);
@@ -1236,6 +1313,78 @@
       hubCards.push({ card, mission, available, metaEl: meta, chipEl: chip, dotsEl: dots, srankBtn });
     }
     refreshHubCounts();
+    setupHubReveal();
+    setupCardTilt();
+  }
+
+  // Cards and group headers rise into place as they scroll into view. Everything waits
+  // for the splash to clear (hubRevealReady) so the first screen's entrance is visible.
+  let revealIO = null, hubRevealReady = false;
+  const revealQueue = [];
+  function setupHubReveal() {
+    if (reducedMotion() || !("IntersectionObserver" in window)) return;
+    const nodes = el.missionGrid.querySelectorAll(".mission-card, .mission-group-header");
+    nodes.forEach((n) => n.classList.add("pre"));
+    revealIO = new IntersectionObserver((entries) => {
+      for (const en of entries) {
+        if (!en.isIntersecting) continue;
+        revealIO.unobserve(en.target);
+        revealQueue.push(en.target);
+      }
+      if (hubRevealReady) flushReveal();
+    }, { root: el.hub, rootMargin: "0px 0px -6% 0px" });
+    nodes.forEach((n) => revealIO.observe(n));
+  }
+  function flushReveal() {
+    revealQueue.splice(0).forEach((n, i) => {
+      n.style.setProperty("--d", Math.min(i * 45, 540) + "ms");
+      n.classList.add("in");
+      n.classList.remove("pre");
+      const done = () => { n.classList.remove("in"); n.style.removeProperty("--d"); };
+      n.addEventListener("animationend", function end(e) {
+        if (e.target !== n) return;
+        n.removeEventListener("animationend", end);
+        done();
+      });
+      setTimeout(done, 1400 + i * 45);
+    });
+  }
+  function startHubReveal() {
+    document.body.classList.add("hub-ready");
+    hubRevealReady = true;
+    flushReveal();
+  }
+
+  // Desktop only (fine pointer + hover): cards tilt toward the cursor with a soft
+  // spotlight. Touch devices never get this, so iPad behavior is untouched.
+  function setupCardTilt() {
+    if (reducedMotion() || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+    let raf = 0, card = null, px = 0, py = 0;
+    const apply = () => {
+      raf = 0;
+      if (!card) return;
+      const r = card.getBoundingClientRect();
+      const x = (px - r.left) / r.width, y = (py - r.top) / r.height;
+      card.style.setProperty("--mx", (x * 100).toFixed(1) + "%");
+      card.style.setProperty("--my", (y * 100).toFixed(1) + "%");
+      card.style.setProperty("--rx", ((x - 0.5) * 8).toFixed(2) + "deg");
+      card.style.setProperty("--ry", ((0.5 - y) * 8).toFixed(2) + "deg");
+    };
+    el.missionGrid.addEventListener("pointermove", (e) => {
+      if (e.pointerType !== "mouse") return;
+      const c = e.target.closest(".mission-card.available");
+      if (c !== card) {
+        if (card) card.classList.remove("tilting");
+        card = c;
+        if (card) card.classList.add("tilting");
+      }
+      px = e.clientX; py = e.clientY;
+      if (card && !raf) raf = requestAnimationFrame(apply);
+    });
+    el.missionGrid.addEventListener("pointerleave", () => {
+      if (card) card.classList.remove("tilting");
+      card = null;
+    });
   }
 
   function applySRankUI(hc) {
@@ -1261,7 +1410,9 @@
       const marked = perFloor.reduce((a, b) => a + b, 0);
 
       hc.metaEl.textContent = n + (n === 1 ? " map" : " maps");
+      const prevChip = hc.chipEl.textContent;
       hc.chipEl.textContent = marked ? marked + " marked" : "clear";
+      if (prevChip && prevChip !== hc.chipEl.textContent) nudge(hc.chipEl, "bump");
       hc.chipEl.classList.toggle("empty", !marked);
 
       // one dot per floor, filled when that floor has marks
@@ -1288,8 +1439,12 @@
         ("mission " + hc.mission.number).includes(q) ||
         (groupMatch && hc.mission.number >= groupMatch.from && hc.mission.number <= groupMatch.to);
       const visible = matchesSearch;
+      const wasHidden = hc.card.hidden;
       hc.card.hidden = !visible;
-      if (visible) shown++;
+      if (visible) {
+        if (wasHidden && !hc.card.classList.contains("pre")) nudge(hc.card, "refilter");
+        shown++;
+      }
     }
     for (const g of hubGroups) {
       const hasVisible = hubCards.some((hc) =>
@@ -1301,12 +1456,13 @@
 
   // Fade the splash out shortly after first paint (instantly if reduced motion).
   function dismissSplash() {
-    if (!el.splash) return;
+    if (!el.splash) { startHubReveal(); return; }
     const hide = () => {
       el.splash.classList.add("gone");
-      setTimeout(() => { el.splash.hidden = true; }, 500);
+      setTimeout(startHubReveal, 180);
+      setTimeout(() => { el.splash.hidden = true; }, 650);
     };
-    if (reducedMotion()) { el.splash.hidden = true; return; }
+    if (reducedMotion()) { el.splash.hidden = true; startHubReveal(); return; }
     setTimeout(hide, 900);
   }
 
@@ -1318,6 +1474,16 @@
     node.classList.add("entering");
   }
 
+  // Replay a one-shot CSS animation class on a node (HTML or SVG), then clear it.
+  function nudge(node, cls) {
+    if (!node || reducedMotion()) return;
+    node.classList.remove(cls);
+    void node.getBoundingClientRect();
+    node.classList.add(cls);
+    clearTimeout(node["_nudge_" + cls]);
+    node["_nudge_" + cls] = setTimeout(() => node.classList.remove(cls), 900);
+  }
+
   // ---- Collapsible rail ----
   function isRailCollapsed() {
     try { return localStorage.getItem(STORAGE_PREFIX + "rail") !== "0"; } catch (e) { return true; }
@@ -1327,6 +1493,7 @@
     el.stage.classList.toggle("rail-collapsed", collapsed);
     el.railToggle.textContent = collapsed ? "›" : "‹";
     el.railToggle.title = collapsed ? "Expand toolbar" : "Collapse toolbar";
+    if (!collapsed) movePillThumb();
   }
   function toggleRail() {
     const collapsed = !el.toolbar.classList.contains("collapsed");
@@ -1346,26 +1513,78 @@
     el.toolbar.classList.toggle("show-more");
   }
 
+  // ---- Screen transitions ----
+  // Where supported, hub <-> map uses a View Transition: the tapped card expands into the
+  // map stage (and shrinks back into it on return). Elsewhere, the CSS enter animation runs.
+  let hubScroll = 0;
+  let inViewTransition = false;
+  function cardFor(mission) {
+    const hc = mission && hubCards.find((h) => h.mission === mission);
+    return hc ? hc.card : null;
+  }
+  function setHero(node, on) {
+    if (node) node.style.viewTransitionName = on ? "mission-hero" : "";
+  }
+  function screenSwap(dir, card, update) {
+    if (!document.startViewTransition || reducedMotion()) { update(); return; }
+    const root = document.documentElement;
+    root.classList.add("vt-" + dir);
+    setHero(dir === "in" ? card : el.stage, true);
+    inViewTransition = true;
+    let t;
+    try {
+      t = document.startViewTransition(() => {
+        setHero(dir === "in" ? card : el.stage, false);
+        update();
+        setHero(dir === "in" ? el.stage : card, true);
+      });
+    } catch (e) {
+      inViewTransition = false;
+      root.classList.remove("vt-" + dir);
+      setHero(card, false); setHero(el.stage, false);
+      update();
+      return;
+    }
+    t.finished.finally(() => {
+      inViewTransition = false;
+      root.classList.remove("vt-" + dir);
+      setHero(card, false); setHero(el.stage, false);
+    });
+  }
+  function goHub() {
+    if (el.hub.hidden === false) return;
+    screenSwap("out", cardFor(state.mission), showHub);
+  }
+  function goMission(mission, card) {
+    if (!mission.maps.length || state.mission) return;
+    screenSwap("in", card || cardFor(mission), () => openMission(mission));
+  }
+
   function showHub() {
     teardownFloors();
     state.mission = null;
     el.stage.hidden = true;
     el.toolbar.hidden = true;
     el.hub.hidden = false;
+    document.body.classList.remove("in-map");
+    el.hub.scrollTop = hubScroll;
     refreshHubCounts();  // reflect edits made inside the mission we just left
-    playEnter(el.hub);
+    if (!inViewTransition) playEnter(el.hub);
   }
 
   function openMission(mission) {
     if (!mission.maps.length) return;
+    if (!el.hub.hidden) hubScroll = el.hub.scrollTop;
+    closeSettings(true);
     state.mission = mission;
     el.missionTitle.textContent = mission.name;
     el.hub.hidden = true;
     el.toolbar.hidden = false;
     el.stage.hidden = false;      // must be visible before we measure/observe
+    document.body.classList.add("in-map");
     applyRailState(isRailCollapsed());
-    playEnter(el.stage);
     playEnter(el.toolbar);
+    if (!inViewTransition) playEnter(el.stage);
     pinRail();
     buildFloors(mission);
     buildFloorNav(mission);
@@ -1397,6 +1616,10 @@
     el.floorNav.innerHTML = "";
     if (mission.maps.length < 2) { el.floorNav.hidden = true; return; }
     el.floorNav.hidden = false;
+    const thumb = document.createElement("span");
+    thumb.className = "pill-thumb";
+    thumb.setAttribute("aria-hidden", "true");
+    el.floorNav.appendChild(thumb);
     mission.maps.forEach((map, idx) => {
       const b = document.createElement("button");
       b.className = "floor-pill";
@@ -1409,8 +1632,9 @@
   function jumpToFloor(idx) {
     const f = state.floors[idx];
     if (!f) return;
-    f.section.scrollIntoView({ behavior: "smooth", block: "start" });
+    f.section.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
     setActiveFloor(idx);
+    nudge(f.section, "flash");
   }
 
   function reducedMotion() {
@@ -1787,7 +2011,7 @@
 
     el.railToggle.addEventListener("click", toggleRail);
     el.moreToggle.addEventListener("click", toggleMore);
-    el.backBtn.addEventListener("click", showHub);
+    el.backBtn.addEventListener("click", goHub);
     el.stampXBtn.addEventListener("click", () => setStampType("x"));
     el.stampWBtn.addEventListener("click", () => setStampType("w"));
     el.arrowBtn.addEventListener("click", () => setTool("arrow"));
@@ -1800,7 +2024,7 @@
     el.themeCycleBtn.addEventListener("click", cycleTheme);
     el.themeSeg.addEventListener("click", (e) => {
       const b = e.target.closest("[data-theme-val]");
-      if (b) setTheme(b.dataset.themeVal);
+      if (b) setThemeAnimated(b.dataset.themeVal, ...centerOf(b));
     });
     el.shareMergeBtn.addEventListener("click", () => applyShare("merge"));
     el.shareReplaceBtn.addEventListener("click", () => applyShare("replace"));
@@ -1835,7 +2059,7 @@
       if ((e.ctrlKey || e.metaKey) && z && e.shiftKey) { e.preventDefault(); redo(); }
       else if ((e.ctrlKey || e.metaKey) && z) { e.preventDefault(); undo(); }
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
-      else if (e.key === "Escape") showHub();
+      else if (e.key === "Escape") goHub();
       else if (e.key === "e") setTool("eraser");
       else if (e.key === "x" || e.key === "s") setStampType("x");
       else if (e.key === "w") setStampType("w");
@@ -1857,21 +2081,20 @@
 
     // Settings dropdown toggle
     el.settingsBtn.addEventListener("click", () => {
-      const opening = el.settingsDropdown.hidden;
-      el.settingsDropdown.hidden = !opening;
-      el.settingsBtn.classList.toggle("open", opening);
-      if (opening) {
-        el.settingsBtn.classList.remove("spin");
-        void el.settingsBtn.offsetWidth;
-        el.settingsBtn.classList.add("spin");
+      if (el.settingsDropdown.hidden || el.settingsDropdown.classList.contains("closing")) {
+        el.settingsDropdown.classList.remove("closing");
+        el.settingsDropdown.hidden = false;
+        el.settingsBtn.classList.add("open");
+        updateThemeButtons();   // position the segment thumb now that it has layout
+      } else {
+        closeSettings();
       }
     });
     document.addEventListener("click", (e) => {
-      if (!el.settingsBtn.contains(e.target) && !el.settingsDropdown.contains(e.target)) {
-        el.settingsDropdown.hidden = true;
-        el.settingsBtn.classList.remove("open");
-      }
+      if (!el.settingsBtn.contains(e.target) && !el.settingsDropdown.contains(e.target)) closeSettings();
     });
+
+    setupRipples();
 
     setupPwaPolish();
 
@@ -1900,6 +2123,76 @@
       if (prev && prev !== APP_VERSION) toast("Updated to v" + APP_VERSION);
       localStorage.setItem(key, APP_VERSION);
     } catch (e) {}
+  }
+
+  function closeSettings(immediate) {
+    const d = el.settingsDropdown;
+    el.settingsBtn.classList.remove("open");
+    if (d.hidden) return;
+    if (immediate || reducedMotion()) { d.classList.remove("closing"); d.hidden = true; return; }
+    if (d.classList.contains("closing")) return;
+    d.classList.add("closing");
+    clearTimeout(closeSettings._t);
+    closeSettings._t = setTimeout(() => {
+      if (!d.classList.contains("closing")) return;
+      d.classList.remove("closing");
+      d.hidden = true;
+    }, 150);
+  }
+
+  // Material-style ink ripple from the touch point. Purely visual: the listener is
+  // passive and never touches the event, so taps behave exactly as before.
+  const RIPPLE_SEL = ".tool, .floor-pill, .rail-toggle, .more-toggle, .settings-btn, .theme-seg button, .toast-action";
+  function setupRipples() {
+    if (reducedMotion()) return;
+    document.addEventListener("pointerdown", (e) => {
+      const b = e.target.closest && e.target.closest(RIPPLE_SEL);
+      if (!b || b.disabled) return;
+      const r = b.getBoundingClientRect();
+      if (!r.width) return;
+      const k = b.offsetWidth / r.width || 1;   // undo the rail's pinch-zoom scale
+      const size = Math.max(b.offsetWidth, b.offsetHeight) * 2.4;
+      const s = document.createElement("span");
+      s.className = "ripple";
+      s.style.width = s.style.height = size + "px";
+      s.style.left = ((e.clientX - r.left) * k - size / 2) + "px";
+      s.style.top = ((e.clientY - r.top) * k - size / 2) + "px";
+      b.appendChild(s);
+      const kill = () => s.remove();
+      s.addEventListener("animationend", kill);
+      setTimeout(kill, 800);
+    }, { passive: true });
+  }
+
+  // Theme change spreads out as a circle from wherever it was triggered.
+  function setThemeAnimated(name, x, y) {
+    if (name === currentTheme()) return;
+    const root = document.documentElement;
+    if (reducedMotion()) { setTheme(name); return; }
+    if (!document.startViewTransition) {
+      root.classList.add("theme-fade");
+      setTheme(name);
+      clearTimeout(setThemeAnimated._t);
+      setThemeAnimated._t = setTimeout(() => root.classList.remove("theme-fade"), 500);
+      return;
+    }
+    const w = window.innerWidth, h = window.innerHeight;
+    if (x == null) { x = w / 2; y = h / 2; }
+    root.style.setProperty("--vt-x", x + "px");
+    root.style.setProperty("--vt-y", y + "px");
+    root.style.setProperty("--vt-r", Math.hypot(Math.max(x, w - x), Math.max(y, h - y)) + "px");
+    root.classList.add("vt-theme");
+    try {
+      document.startViewTransition(() => setTheme(name)).finished
+        .finally(() => root.classList.remove("vt-theme"));
+    } catch (e) {
+      root.classList.remove("vt-theme");
+      setTheme(name);
+    }
+  }
+  function centerOf(node) {
+    const r = node.getBoundingClientRect();
+    return [r.left + r.width / 2, r.top + r.height / 2];
   }
 
   let toastTimer = null;
