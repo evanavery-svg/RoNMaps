@@ -37,6 +37,8 @@
   --card-border: rgba(255,255,255,.06);
   --card-hover: #282828;
   --glow: rgba(230,57,70,.15);
+  --stage-dot: rgba(255,255,255,.05);
+  --stage-vig: rgba(0,0,0,.35);
 }
 
 :root[data-theme="night"] {
@@ -62,6 +64,7 @@
   --card-border: rgba(255,255,255,.04);
   --card-hover: #1a1a1a;
   --glow: rgba(230,57,70,.1);
+  --stage-dot: rgba(255,255,255,.03);
 }
 
 :root[data-theme="day"] {
@@ -90,6 +93,8 @@
   --card-hover: #f0f0f0;
   --on-accent: #fff;
   --glow: rgba(220,38,38,.1);
+  --stage-dot: rgba(0,0,0,.08);
+  --stage-vig: rgba(0,0,0,.06);
 }
 
 .mono, .tb-label, .m-num, .floor-label, .floor-pill, .m-meta {
@@ -769,7 +774,12 @@ body.hub-ready .hub-title { animation: title-shine 1.5s .45s cubic-bezier(.4,0,.
   flex: 1 1 auto;
   min-height: 0;
   margin-left: var(--rail);
-  background: var(--stage);
+  /* faint plotting-table dot grid in the gutters beside the blueprint (static: the
+     stage itself never scrolls, so this costs nothing while you pan) */
+  background:
+    radial-gradient(circle, var(--stage-dot) 1px, transparent 1.4px) 0 0 / 22px 22px,
+    radial-gradient(ellipse at 50% 40%, transparent 55%, var(--stage-vig) 100%),
+    var(--stage);
   overflow: hidden;
 }
 .floor-scroll {
@@ -783,22 +793,60 @@ body.hub-ready .hub-title { animation: title-shine 1.5s .45s cubic-bezier(.4,0,.
   scroll-snap-type: y proximity;
   scroll-padding-top: 34px;
 }
-.floor-section { position: relative; scroll-snap-align: start; }
+/* A section grows as wide as its zoomed map, so the label can stay pinned to the
+   viewport (sticky top AND left) while you pan a zoomed floor sideways. */
+.floor-section { position: relative; scroll-snap-align: start; min-width: 100%; width: max-content; }
 .floor-label {
   position: sticky;
-  top: 0;
+  top: 0; left: 0;
+  width: var(--view-w, 100%);
   z-index: 3;
-  padding: 8px 16px;
+  display: flex; align-items: center;
+  min-height: 34px;
+  padding: 6px 10px 6px 16px;
   font-size: 12px;
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--muted);
+  /* opaque, no backdrop blur: a blur over a scrolling blueprint re-renders every frame */
   background: var(--label-bg);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
   transition: color .15s ease;
+  white-space: pre;
 }
+.floor-fit {
+  order: 2;   /* after the "in view" tag, pushed to the right edge */
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 2px;
+  font: 600 11px/1 var(--mono); letter-spacing: .06em;
+  color: var(--text);
+  background: var(--toolbar-2); border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 10px;
+  cursor: pointer;
+  position: relative; overflow: hidden;
+  opacity: 0; transform: scale(.85); pointer-events: none;
+  transition: opacity .2s ease, transform .3s cubic-bezier(.34,1.56,.64,1),
+              background-color .15s ease, border-color .15s ease;
+}
+.floor-fit span { color: var(--accent); }
+.floor-section.zoomed .floor-fit { opacity: 1; transform: none; pointer-events: auto; }
+.floor-fit:hover { border-color: var(--accent); }
+.floor-fit:active { transform: scale(.94); }
+
+/* live zoom readout */
+.zoom-pill {
+  position: absolute; top: 46px; right: 14px; z-index: 5;
+  font: 700 13px/1 var(--mono); letter-spacing: .04em;
+  color: var(--text);
+  background: var(--toolbar-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 7px 12px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.3);
+  pointer-events: none;
+  opacity: 0; translate: 0 -6px; scale: .92;
+  transition: opacity .25s ease, translate .3s cubic-bezier(.22,1,.36,1), scale .3s cubic-bezier(.22,1,.36,1);
+}
+.zoom-pill.show { opacity: 1; translate: none; scale: none; }
 .floor-label::before {
   content: ""; display: inline-block; vertical-align: middle;
   width: 3px; height: 12px; margin-right: 10px;
@@ -952,7 +1000,6 @@ body.hub-ready .hub-title { animation: title-shine 1.5s .45s cubic-bezier(.4,0,.
   max-width: 92%;
   text-align: center;
   transition: opacity .3s ease;
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   box-shadow: 0 4px 16px rgba(0,0,0,.2);
   animation: hint-in .5s .35s cubic-bezier(.34,1.4,.64,1) both;
 }

@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.41";
+  const APP_VERSION = "0.42";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -34,6 +34,7 @@
     railToggle: document.getElementById("railToggle"),
     moreToggle: document.getElementById("moreToggle"),
     backBtn: document.getElementById("backBtn"),
+    zoomPill: document.getElementById("zoomPill"),
     missionTitle: document.getElementById("missionTitle"),
     stage: document.getElementById("stage"),
     scroller: document.getElementById("floorScroll"),
@@ -593,6 +594,7 @@
       // a second finger means a pinch is starting — never let it become a tap/stamp
       if (touchPointers.size > 1 || pinch) { abortPressForPinch(); return; }
     }
+    if (e.target.closest && e.target.closest(".floor-fit")) { press = null; return; }
     const floor = floorFromEvent(e);
     if (!floor) { press = null; return; }
 
@@ -1613,6 +1615,37 @@
       f.fitWidth = fitW;
       f.wrap.style.width = Math.round(fitW) + "px";
     }
+    // floor labels stay pinned across the viewport even when a floor is zoomed wide
+    el.scroller.style.setProperty("--view-w", availW + "px");
+  }
+
+  // One place that decides whether a floor counts as zoomed (from its committed width),
+  // so the scroller, the label's Fit button and its zoom readout always agree.
+  function setFloorZoomed(f, width) {
+    const k = f.fitWidth ? width / f.fitWidth : 1;
+    f.zoomed = k > 1.02;
+    f.section.classList.toggle("zoomed", f.zoomed);
+    if (f.fitBtn) f.fitBtn.firstChild.textContent = k.toFixed(1) + "\u00d7 ";
+    el.scroller.classList.toggle("zoomed", state.floors.some((x) => x.zoomed));
+  }
+
+  // Floating zoom readout: live while zooming, fades shortly after.
+  let zoomPillTimer = 0;
+  function showZoomLevel(k, hold) {
+    el.zoomPill.textContent = (Math.round(k * 10) / 10).toFixed(1) + "\u00d7";
+    el.zoomPill.classList.add("show");
+    clearTimeout(zoomPillTimer);
+    if (!hold) zoomPillTimer = setTimeout(() => el.zoomPill.classList.remove("show"), 700);
+  }
+
+  // Animate a zoomed floor back to fit, around whatever is in the middle of the view.
+  function zoomToFit(f) {
+    if (!f.zoomed) return;
+    const sc = el.scroller.getBoundingClientRect();
+    const r = f.img.getBoundingClientRect();
+    const x = clamp((sc.left + sc.width / 2 - r.left) / r.width, 0, 1) * f.map.width;
+    const y = clamp((sc.top + sc.height / 2 - r.top) / r.height, 0, 1) * f.map.height;
+    toggleZoom(f, x, y);
   }
 
   // Floor quick-jump pills in the toolbar (only when a mission has >1 floor).
@@ -1653,27 +1686,23 @@
   // big blueprint doesn't re-layout every frame the way animating `width` would.
   function toggleZoom(floor, imgX, imgY) {
     const prevW = floor.wrap.getBoundingClientRect().width;
-    floor.zoomed = !floor.zoomed;
-
     const availW = el.scroller.clientWidth || window.innerWidth;
-    const nextW = floor.zoomed
+    const nextW = !floor.zoomed
       ? Math.max((floor.fitWidth || availW) * 2.2, availW * 1.6)
       : floor.fitWidth;
 
-    if (floor.zoomed) el.scroller.classList.add("zoomed");
-
     // FLIP: jump to the new width, then play the scale back from the old one.
+    clearTimeout(floor.zoomTimer);
     floor.wrap.style.transition = "none";
     floor.wrap.style.width = Math.round(nextW) + "px";
+    setFloorZoomed(floor, nextW);
+    showZoomLevel(nextW / floor.fitWidth);
 
     // Recentre INSTANTLY, in the same frame as the layout change. A smooth scroll here
     // would run on its own timeline and desync from the transform animation, which is
     // what made the zoom feel wobbly — now the single GPU transform carries all the
     // visible motion and the scroll is already where it needs to be.
     centerOn(floor, imgX, imgY);
-    if (!floor.zoomed && !state.floors.some((f) => f.zoomed)) {
-      el.scroller.classList.remove("zoomed");
-    }
 
     const ratio = prevW / nextW;
     if (!reducedMotion() && isFinite(ratio) && ratio > 0 && Math.abs(ratio - 1) > 0.01) {
@@ -1683,7 +1712,7 @@
       floor.wrap.style.transform = "scale(" + ratio + ")";
       floor.wrap.style.willChange = "transform";   // promote for the animation only
       requestAnimationFrame(() => {
-        floor.wrap.style.transition = "transform .32s cubic-bezier(.25,.1,.25,1)";
+        floor.wrap.style.transition = "transform .38s cubic-bezier(.22,1,.36,1)";
         floor.wrap.style.transform = "scale(1)";
       });
       clearTimeout(floor.zoomTimer);
@@ -1691,7 +1720,7 @@
         floor.wrap.style.transition = "";
         floor.wrap.style.transform = "";
         floor.wrap.style.willChange = "";          // release the layer again
-      }, 380);
+      }, 420);
     } else {
       floor.wrap.style.transform = "";
     }
@@ -1706,9 +1735,7 @@
     el.scroller.scrollTo({ left, top, behavior: "auto" });
   }
 
-  // Ctrl+scroll (or trackpad pinch on desktop) zooms the map toward the cursor.
-  // iPad touch pinch uses the native visual viewport, so this only fires with a
-  // mouse/trackpad — exactly the "desktop only" behavior we want.
+  // Ctrl+scroll (or Chrome's trackpad pinch) zooms the map toward the cursor.
   function onWheel(e) {
     if (!e.ctrlKey || !state.mission) return;
     const floor = floorFromEvent(e);
@@ -1729,10 +1756,8 @@
     if (Math.abs(nextW - prevW) < 1) return;
 
     floor.wrap.style.width = Math.round(nextW) + "px";
-    floor.zoomed = nextW > fitW * 1.05;
-
-    if (floor.zoomed) el.scroller.classList.add("zoomed");
-    else if (!state.floors.some((f) => f.zoomed)) el.scroller.classList.remove("zoomed");
+    setFloorZoomed(floor, nextW);
+    showZoomLevel(nextW / fitW);
 
     const newRect = floor.img.getBoundingClientRect();
     const newX = newRect.left + (imgPt.x / floor.map.width) * newRect.width;
@@ -1769,6 +1794,7 @@
     const rect = floor.wrap.getBoundingClientRect();
     pinch = {
       floor, cx0: cx, cy0: cy, cx, cy, k: 1, raf: 0,
+      raw: 1, rawBase: 1, rx: 0, ry: 0, holdTimer: 0,
       w0: rect.width,
       imgPt: toImageRect(floor, floor.img.getBoundingClientRect(), cx, cy),
       sl0: el.scroller.scrollLeft, st0: el.scroller.scrollTop,
@@ -1782,23 +1808,62 @@
     return true;
   }
 
-  function updatePinch(k, cx, cy) {
+  // raw = scale since the gesture began (finger spread ratio, or Safari's e.scale)
+  function updatePinch(raw, cx, cy) {
     const p = pinch;
+    p.raw = raw;
+    let k = raw / p.rawBase;
     const lo = p.floor.fitWidth / p.w0, hi = (p.floor.fitWidth * 6) / p.w0;
     // past the limits the map resists (rubber band) and settles back on release
     if (k < lo) k = lo * Math.pow(k / lo, 0.35);
     else if (k > hi) k = hi * Math.pow(k / hi, 0.35);
     p.k = k; p.cx = cx; p.cy = cy;
     if (!p.raf) p.raf = requestAnimationFrame(applyPinchFrame);
+    // fingers held still → re-render at the real size so the blueprint sharpens
+    clearTimeout(p.holdTimer);
+    p.holdTimer = setTimeout(rebasePinch, 150);
   }
   function applyPinchFrame() {
     const p = pinch;
     if (!p) return;
     p.raf = 0;
     // follow the fingers; compensate if the scroller still moved underneath us
-    const tx = p.cx - p.cx0 + (el.scroller.scrollLeft - p.sl0);
-    const ty = p.cy - p.cy0 + (el.scroller.scrollTop - p.st0);
+    const tx = p.cx - p.cx0 + p.rx + (el.scroller.scrollLeft - p.sl0);
+    const ty = p.cy - p.cy0 + p.ry + (el.scroller.scrollTop - p.st0);
     p.floor.wrap.style.transform = "translate3d(" + tx + "px," + ty + "px,0) scale(" + p.k + ")";
+    showZoomLevel((p.w0 * p.k) / p.floor.fitWidth, true);
+  }
+
+  // Swap the scaled (blurry) GPU layer for real layout at the current size, then keep
+  // pinching from there. Any offset the scroll couldn't absorb (map edges) is carried
+  // as a residual translate so nothing on screen moves at the swap.
+  function commitPinchLayout(p, atX, atY) {
+    const f = p.floor, fit = f.fitWidth;
+    const w = clamp(p.w0 * p.k, fit, fit * 6);
+    f.wrap.style.transform = "";
+    f.wrap.style.width = Math.round(w) + "px";
+    setFloorZoomed(f, w);
+    const r = f.img.getBoundingClientRect();
+    el.scroller.scrollLeft += r.left + (p.imgPt.x / f.map.width) * r.width - atX;
+    el.scroller.scrollTop += r.top + (p.imgPt.y / f.map.height) * r.height - atY;
+  }
+  function rebasePinch() {
+    const p = pinch;
+    if (!p || Math.abs(p.k - 1) < 0.03) return;
+    const fit = p.floor.fitWidth, shown = p.w0 * p.k;
+    if (shown < fit - 0.5 || shown > fit * 6 + 0.5) return;   // mid rubber-band
+    if (p.raf) { cancelAnimationFrame(p.raf); p.raf = 0; }
+    commitPinchLayout(p, p.cx + p.rx, p.cy + p.ry);   // keep it exactly where it's shown
+    const f = p.floor;
+    const ir = f.img.getBoundingClientRect(), wr = f.wrap.getBoundingClientRect();
+    const px = ir.left + (p.imgPt.x / f.map.width) * ir.width;
+    const py = ir.top + (p.imgPt.y / f.map.height) * ir.height;
+    p.rx = p.cx - px; p.ry = p.cy - py;
+    p.w0 = wr.width; p.k = 1; p.rawBase = p.raw;
+    p.cx0 = p.cx; p.cy0 = p.cy;
+    p.sl0 = el.scroller.scrollLeft; p.st0 = el.scroller.scrollTop;
+    f.wrap.style.transformOrigin = (px - wr.left) + "px " + (py - wr.top) + "px";
+    applyPinchFrame();
   }
 
   function endPinch() {
@@ -1806,31 +1871,26 @@
     if (!p) return;
     pinch = null;
     if (p.raf) cancelAnimationFrame(p.raf);
-    const f = p.floor, fit = f.fitWidth;
+    clearTimeout(p.holdTimer);
+    const f = p.floor;
     const shownW = p.w0 * p.k;
-    const nextW = clamp(shownW, fit, fit * 6);
+    // where the pinched spot is on screen right now (incl. any residual offset)
+    const shownX = p.cx + p.rx, shownY = p.cy + p.ry;
 
     // Commit in one synchronous pass (no paint in between): real width, then scroll
     // so the pinched spot sits under where the fingers ended.
     el.scroller.classList.remove("pinching");
     f.wrap.classList.remove("pinching");
-    f.wrap.style.transform = "";
-    f.wrap.style.width = Math.round(nextW) + "px";
-    f.zoomed = nextW > fit * 1.02;
-    if (f.zoomed) el.scroller.classList.add("zoomed");
-    else if (!state.floors.some((x) => x.zoomed)) el.scroller.classList.remove("zoomed");
-
-    let r = f.img.getBoundingClientRect();
-    el.scroller.scrollLeft += r.left + (p.imgPt.x / f.map.width) * r.width - p.cx;
-    el.scroller.scrollTop += r.top + (p.imgPt.y / f.map.height) * r.height - p.cy;
+    commitPinchLayout(p, p.cx, p.cy);
+    showZoomLevel(f.wrap.getBoundingClientRect().width / f.fitWidth);
 
     // FLIP from what was on screen to the committed layout, so an overshoot (or a
     // scroll that hit an edge) glides into place instead of snapping.
-    r = f.img.getBoundingClientRect();
+    const r = f.img.getBoundingClientRect();
     const px = r.left + (p.imgPt.x / f.map.width) * r.width;
     const py = r.top + (p.imgPt.y / f.map.height) * r.height;
     const ratio = shownW / r.width;
-    const dx = p.cx - px, dy = p.cy - py;
+    const dx = shownX - px, dy = shownY - py;
     if (reducedMotion() || (Math.abs(ratio - 1) < 0.005 && Math.abs(dx) < 1 && Math.abs(dy) < 1)) {
       f.wrap.style.transition = "";
       f.wrap.style.willChange = "";
@@ -1924,7 +1984,12 @@
       labelName.textContent = map.name;
       const countEl = document.createElement("span");
       countEl.className = "floor-count";
-      label.append(labelName, countEl);
+      const fitBtn = document.createElement("button");
+      fitBtn.type = "button";
+      fitBtn.className = "floor-fit";
+      fitBtn.title = "Zoom back to fit";
+      fitBtn.append(document.createTextNode("1.0\u00d7 "), Object.assign(document.createElement("span"), { textContent: "Fit" }));
+      label.append(labelName, countEl, fitBtn);
 
       const wrap = document.createElement("div");
       wrap.className = "floor-wrap";
@@ -1943,7 +2008,8 @@
       section.append(label, wrap);
       el.scroller.appendChild(section);
 
-      const floor = { map, markers: loadMarkers(map.id), undoStack: [], redoStack: [], section, wrap, img, svg, countEl, zoomed: false, fitWidth: 0 };
+      const floor = { map, markers: loadMarkers(map.id), undoStack: [], redoStack: [], section, wrap, img, svg, countEl, fitBtn, zoomed: false, fitWidth: 0 };
+      fitBtn.addEventListener("click", () => zoomToFit(floor));
       state.floors.push(floor);
 
       const applyDims = (w, h) => {
