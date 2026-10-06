@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.43";
+  const APP_VERSION = "0.44";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -55,6 +55,13 @@
     layerPenBtn: document.getElementById("layerPenBtn"),
     eraserBtn: document.getElementById("eraserBtn"),
     shareBtn: document.getElementById("shareBtn"),
+    exportBtn: document.getElementById("exportBtn"),
+    notesBtn: document.getElementById("notesBtn"),
+    notesModal: document.getElementById("notesModal"),
+    notesTitle: document.getElementById("notesTitle"),
+    notesText: document.getElementById("notesText"),
+    notesDoneBtn: document.getElementById("notesDoneBtn"),
+    hubFilters: document.getElementById("hubFilters"),
     themeSeg: document.getElementById("themeSeg"),
     themeCycleBtn: document.getElementById("themeCycleBtn"),
     themeCycleLabel: document.getElementById("themeCycleLabel"),
@@ -157,8 +164,8 @@
     floor.redoStack.length = 0; // a fresh action invalidates the redo history
     updateButtons();
   }
-  function undo() {
-    const f = activeFloor();
+  function undo() { undoFloor(activeFloor()); }
+  function undoFloor(f) {
     if (!f || !f.undoStack.length) return;
     f.redoStack.push(JSON.stringify(f.markers));
     applySnapshot(f, f.undoStack.pop());
@@ -232,6 +239,8 @@
     updateSizeGroup();
     buzz([10, 30, 10]);
     if (isStamp(gone)) spawnPulse(floor, gone.x, gone.y, "#fff", "erase-pulse");
+    const depth = floor.undoStack.length;
+    toast("Mark removed", { action: "Undo", onAction: () => { if (floor.undoStack.length === depth) undoFloor(floor); } });
   }
 
   // Re-render a floor, animating marks that appeared (pop/draw in) and marks that
@@ -936,6 +945,7 @@
   function setActiveFloor(i) {
     if (i < 0 || i >= state.floors.length) return;
     state.activeIndex = i;
+    if (state.mission) { try { localStorage.setItem(floorKey(state.mission), String(i)); } catch (e) {} }
     state.floors.forEach((f, idx) => f.section.classList.toggle("active", idx === i));
     const pills = el.floorNav.querySelectorAll(".floor-pill");
     for (let k = 0; k < pills.length; k++) pills[k].classList.toggle("active", k === i);
@@ -970,7 +980,10 @@
       b.style.setProperty("--sw", c);
       b.title = c;
       b.setAttribute("aria-label", "Color " + c);
-      b.addEventListener("click", () => setColor(c));
+      b.addEventListener("click", () => {
+        if (el.toolbar.classList.contains("collapsed")) { toggleRail(); return; }
+        setColor(c);
+      });
       el.swatches.appendChild(b);
     }
   }
@@ -1407,7 +1420,7 @@
     syncRecentVisibility();
   }
   function syncRecentVisibility() {
-    el.recent.hidden = !recentCount || !!el.missionSearch.value.trim();
+    el.recent.hidden = !recentCount || !!el.missionSearch.value.trim() || hubFilter !== "all";
   }
 
   // ---- First-open gesture guide ----
@@ -1515,6 +1528,7 @@
       const n = hc.mission.maps.length;
       const perFloor = hc.mission.maps.map((map) => stampCount(loadMarkers(map.id)));
       const marked = perFloor.reduce((a, b) => a + b, 0);
+      hc.marked = marked;
 
       hc.metaEl.textContent = n + (n === 1 ? " map" : " maps");
       const prevChip = hc.chipEl.textContent;
@@ -1536,6 +1550,19 @@
     updateProgress();
   }
 
+  let hubFilter = "all";
+  function setHubFilter(name) {
+    hubFilter = name;
+    for (const b of el.hubFilters.querySelectorAll(".chip")) b.classList.toggle("active", b.dataset.filter === name);
+    filterHub();
+  }
+  function passesFilter(hc) {
+    if (hubFilter === "all") return true;
+    const ranked = !!getSRank(hc.mission);
+    if (hubFilter === "ranked") return ranked;
+    if (hubFilter === "progress") return hc.marked > 0;
+    return !ranked && !hc.marked;   // untouched
+  }
   function filterHub() {
     const q = el.missionSearch.value.trim().toLowerCase();
     let shown = 0;
@@ -1546,7 +1573,7 @@
         String(hc.mission.number) === q ||
         ("mission " + hc.mission.number).includes(q) ||
         (groupMatch && hc.mission.number >= groupMatch.from && hc.mission.number <= groupMatch.to);
-      const visible = matchesSearch;
+      const visible = matchesSearch && (!hc.available || passesFilter(hc));
       const wasHidden = hc.card.hidden;
       hc.card.hidden = !visible;
       if (visible) {
@@ -1560,7 +1587,97 @@
       g.el.hidden = !hasVisible;
     }
     el.hubEmpty.hidden = shown > 0;
+    el.hubEmpty.textContent = q ? "No missions match your search." :
+      hubFilter === "progress" ? "No missions in progress \u2014 open one and start marking." :
+      hubFilter === "ranked" ? "No S-ranks yet \u2014 tap the star on a mission card." :
+      "Every mission has been touched.";
     syncRecentVisibility();
+  }
+
+  // ---- Per-mission notes ----
+  function notesKey(mission) { return STORAGE_PREFIX + "notes:" + mission.id; }
+  function loadNotes(mission) { try { return localStorage.getItem(notesKey(mission)) || ""; } catch (e) { return ""; } }
+  function saveNotes(mission, text) {
+    try {
+      if (text) localStorage.setItem(notesKey(mission), text);
+      else localStorage.removeItem(notesKey(mission));
+    } catch (e) {}
+  }
+  function updateNotesBadge() {
+    el.notesBtn.classList.toggle("has-notes", !!(state.mission && loadNotes(state.mission)));
+  }
+  function openNotes() {
+    if (!state.mission) return;
+    el.notesTitle.textContent = state.mission.name;
+    el.notesText.value = loadNotes(state.mission);
+    el.notesModal.hidden = false;
+    el.notesText.focus({ preventScroll: true });
+  }
+  function closeNotes() {
+    if (el.notesModal.hidden) return;
+    el.notesModal.hidden = true;
+    updateNotesBadge();
+  }
+
+  // ---- Remember which floor you were on, per mission ----
+  function floorKey(mission) { return STORAGE_PREFIX + "floor:" + mission.id; }
+
+  // ---- Export the active floor (blueprint + marks) as a PNG ----
+  async function exportFloorImage() {
+    const f = activeFloor();
+    if (!f || !f.img.complete || !f.img.naturalWidth) { toast("Map still loading \u2014 try again in a moment"); return; }
+    el.exportBtn.disabled = true;
+    try {
+      const W = f.map.width, H = f.map.height;
+      const canvas = document.createElement("canvas");
+      canvas.width = W; canvas.height = H;
+      const c2 = canvas.getContext("2d");
+      c2.fillStyle = "#fff"; c2.fillRect(0, 0, W, H);
+      c2.drawImage(f.img, 0, 0, W, H);
+
+      const svg = f.svg.cloneNode(true);
+      svg.querySelectorAll(".sel-box, .sel-handle, .mark-ghost, .draft, .stamp-pulse, .erase-pulse").forEach((n) => n.remove());
+      svg.setAttribute("xmlns", SVGNS);
+      svg.setAttribute("width", W); svg.setAttribute("height", H);
+      const svgUrl = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml;charset=utf-8" }));
+      try {
+        await new Promise((res, rej) => {
+          const im = new Image();
+          im.onload = () => { c2.drawImage(im, 0, 0, W, H); res(); };
+          im.onerror = rej;
+          im.src = svgUrl;
+        });
+      } finally { URL.revokeObjectURL(svgUrl); }
+
+      const n = stampCount(f.markers);
+      const cap = state.mission.name + "  \u00b7  " + f.map.name + (n ? "  \u00b7  " + n + " marked" : "");
+      const fs = Math.max(18, Math.round(W / 60));
+      c2.font = "700 " + fs + "px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+      const tw = c2.measureText(cap).width;
+      c2.fillStyle = "rgba(0,0,0,.72)";
+      c2.fillRect(0, H - fs * 2.2, tw + fs * 2, fs * 2.2);
+      c2.fillStyle = "#fff";
+      c2.textBaseline = "middle";
+      c2.fillText(cap, fs, H - fs * 1.1);
+
+      const png = await new Promise((r) => canvas.toBlob(r, "image/png"));
+      const fname = (state.mission.name + " " + f.map.name).replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") + ".png";
+      const file = new File([png], fname, { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: cap }); return; }
+        catch (e) { if (e && e.name === "AbortError") return; }
+      }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(png);
+      a.download = fname;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast("Image saved");
+    } catch (e) {
+      toast("Couldn't export this floor");
+    } finally {
+      el.exportBtn.disabled = false;
+    }
   }
 
   // Fade the splash out shortly after first paint (instantly if reduced motion).
@@ -1678,6 +1795,7 @@
     document.body.classList.remove("in-map");
     el.hub.scrollTop = hubScroll;
     refreshHubCounts();  // reflect edits made inside the mission we just left
+    filterHub();
     renderRecent();
     if (!inViewTransition) playEnter(el.hub);
   }
@@ -1702,7 +1820,14 @@
     updateSizeGroup();
     setTool(state.tool);
     el.scroller.scrollTop = 0;
-    setActiveFloor(0);
+    let start = 0;
+    try { start = clamp(Number(localStorage.getItem(floorKey(mission))) || 0, 0, state.floors.length - 1); } catch (e) {}
+    setActiveFloor(start);
+    if (start > 0) {
+      state.floors[start].section.scrollIntoView({ block: "start" });
+      nudge(state.floors[start].section, "flash");
+    }
+    updateNotesBadge();
     state.floors.forEach(updateFloorCount);   // seed the floor-pill counts
     noteRecent(mission);
     if (!guideSeen()) setTimeout(showGuide, reducedMotion() ? 0 : 750);
@@ -2234,7 +2359,9 @@
       payload.f[f.map.id] = f.markers.map(compactMark);
       total += f.markers.length;
     }
-    if (!total) return null;
+    const notes = loadNotes(state.mission).slice(0, 4000);
+    if (notes) payload.n = notes;
+    if (!total && !notes) return null;
     const json = new TextEncoder().encode(JSON.stringify(payload));
     const packed = await deflate(json);
     const data = packed ? "z" + b64urlEncode(packed) : "j" + b64urlEncode(json);
@@ -2244,7 +2371,7 @@
 
   async function shareCurrentMission() {
     const made = await buildShareLink().catch(() => null);
-    if (!made) { toast("Nothing to share yet — add some marks first."); return; }
+    if (!made) { toast("Nothing to share yet \u2014 add some marks or notes first."); return; }
     if (made.url.length > 30000) { toast("Too many marks to fit in a link."); return; }
     const title = state.mission.name + " — RoN Maps";
     try {
@@ -2289,9 +2416,10 @@
     let count = 0;
     for (const k of Object.keys(data.f)) count += (data.f[k] || []).length;
     pendingShare = { mission, data, count };
+    const hasNotes = typeof data.n === "string" && data.n.trim();
     el.shareSummary.textContent =
-      count + " mark" + (count === 1 ? "" : "s") + " for " + mission.name +
-      ". Add them to your own marks, or replace what you have for this mission?";
+      count + " mark" + (count === 1 ? "" : "s") + (hasNotes ? " and notes" : "") + " for " + mission.name +
+      ". Add them to your own, or replace what you have for this mission?";
     el.shareImport.hidden = false;
   }
 
@@ -2312,9 +2440,14 @@
         added += incoming.length;
       }
     }
+    const n = typeof ps.data.n === "string" ? ps.data.n.trim().slice(0, 4000) : "";
+    if (n) {
+      const mine = loadNotes(ps.mission);
+      saveNotes(ps.mission, mode === "replace" || !mine ? n : (mine.includes(n) ? mine : mine + "\n\n" + n));
+    }
     refreshHubCounts();
     openMission(ps.mission);
-    toast(added + " mark" + (added === 1 ? "" : "s") + " loaded");
+    toast(added + " mark" + (added === 1 ? "" : "s") + (n ? " + notes" : "") + " loaded");
   }
   function saveMarkersFor(mapId, markers) {
     try { localStorage.setItem(STORAGE_PREFIX + mapId, JSON.stringify(markers)); } catch (e) {}
@@ -2349,6 +2482,15 @@
     el.layerArrowBtn.addEventListener("click", () => toggleLayer("arrow"));
     el.layerPenBtn.addEventListener("click", () => toggleLayer("pen"));
     el.shareBtn.addEventListener("click", shareCurrentMission);
+    el.exportBtn.addEventListener("click", exportFloorImage);
+    el.notesBtn.addEventListener("click", openNotes);
+    el.notesDoneBtn.addEventListener("click", closeNotes);
+    el.notesModal.addEventListener("click", (e) => { if (e.target === el.notesModal) closeNotes(); });
+    el.notesText.addEventListener("input", () => { if (state.mission) saveNotes(state.mission, el.notesText.value.trim()); });
+    el.hubFilters.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-filter]");
+      if (b) setHubFilter(b.dataset.filter);
+    });
     el.themeCycleBtn.addEventListener("click", cycleTheme);
     el.themeSeg.addEventListener("click", (e) => {
       const b = e.target.closest("[data-theme-val]");
@@ -2386,8 +2528,10 @@
     document.addEventListener("keydown", (e) => {
       if (!el.hub.hidden) return; // no shortcuts on the hub
       if (!el.guide.hidden) { if (e.key === "Escape" || e.key === "Enter") hideGuide(); return; }
-      if (e.key === "?") { showGuide(); return; }
+      if (!el.notesModal.hidden) { if (e.key === "Escape") closeNotes(); return; }
       if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (e.key === "?") { e.preventDefault(); showGuide(); return; }
+      if (e.key === "n") { e.preventDefault(); openNotes(); return; }   // or the "n" lands in the textarea
       const z = e.key.toLowerCase() === "z";
       if ((e.ctrlKey || e.metaKey) && z && e.shiftKey) { e.preventDefault(); redo(); }
       else if ((e.ctrlKey || e.metaKey) && z) { e.preventDefault(); undo(); }

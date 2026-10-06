@@ -52,6 +52,12 @@
         <input id="missionSearch" class="mission-search" type="search"
                inputmode="search" placeholder="Search missions…" aria-label="Search missions" />
       </div>
+      <div class="hub-filters" id="hubFilters" role="group" aria-label="Filter missions">
+        <button type="button" class="chip active" data-filter="all">All</button>
+        <button type="button" class="chip" data-filter="progress">In progress</button>
+        <button type="button" class="chip" data-filter="ranked">S-ranked</button>
+        <button type="button" class="chip" data-filter="untouched">Untouched</button>
+      </div>
       <div class="progress" id="progress" title="Missions you've marked as S-ranked">
         <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
         <span class="progress-txt" id="progressTxt"></span>
@@ -78,6 +84,19 @@
         <button id="shareMergeBtn" class="tool">Add to my marks</button>
         <button id="shareReplaceBtn" class="tool tool-danger">Replace my marks</button>
         <button id="shareCancelBtn" class="tool">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-mission notes (autosaved) -->
+  <div class="modal notes-modal" id="notesModal" hidden>
+    <div class="sheet notes-sheet">
+      <h2 class="sheet-title">Notes <span class="notes-mission" id="notesTitle"></span></h2>
+      <textarea id="notesText" class="notes-text" rows="7" spellcheck="false"
+                placeholder="Callouts, entry order, who takes what…"></textarea>
+      <div class="notes-foot">
+        <span class="notes-hint">Saves as you type · included in share links</span>
+        <button id="notesDoneBtn" class="tool notes-done" type="button">Done</button>
       </div>
     </div>
   </div>
@@ -130,7 +149,7 @@
       <span class="tb-title" id="missionTitle"></span>
     </div>
 
-    <div class="tb-group tb-colors" id="swatches" role="group" aria-label="Marker color"></div>
+    <div class="tb-group tb-colors tb-core" id="swatches" role="group" aria-label="Marker color"></div>
 
     <div class="tb-group tb-tools tb-core">
       <button id="stampXBtn" class="tool active" aria-pressed="true" title="Stamp X (tap the map)">
@@ -169,6 +188,8 @@
 
     <div class="tb-group tb-share tb-extra">
       <button id="shareBtn" class="tool" title="Copy a link to this marked-up mission">⇪<span class="tool-txt">Share</span></button>
+      <button id="exportBtn" class="tool" title="Export this floor as an image">⇩<span class="tool-txt">Image</span></button>
+      <button id="notesBtn" class="tool notes-btn" title="Mission notes (N)">≡<span class="tool-txt">Notes</span></button>
       <button id="themeCycleBtn" class="tool theme-cycle" title="Switch theme">◐<span class="tool-txt" id="themeCycleLabel">Theme</span></button>
     </div>
 
