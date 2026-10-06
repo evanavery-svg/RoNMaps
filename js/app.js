@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.42";
+  const APP_VERSION = "0.43";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -28,6 +28,14 @@
     settingsDropdown: document.getElementById("settingsDropdown"),
     offlineBadge: document.getElementById("offlineBadge"),
     toast: document.getElementById("toast"),
+    recent: document.getElementById("recent"),
+    recentRow: document.getElementById("recentRow"),
+    progress: document.getElementById("progress"),
+    progressBar: document.getElementById("progressBar"),
+    progressTxt: document.getElementById("progressTxt"),
+    guide: document.getElementById("guide"),
+    guideOkBtn: document.getElementById("guideOkBtn"),
+    helpBtn: document.getElementById("helpBtn"),
     appFoot: document.getElementById("appFoot"),
     splash: document.getElementById("splash"),
     toolbar: document.getElementById("toolbar"),
@@ -339,6 +347,8 @@
     const prev = floor.countEl.textContent;
     floor.countEl.textContent = n ? " · " + n : "";
     if (prev !== floor.countEl.textContent && n) bumpCount(floor.countEl);
+    const pill = el.floorNav.querySelectorAll(".floor-pill")[indexOf(floor)];
+    if (pill) pill.querySelector(".pill-n").textContent = n ? String(n) : "";
   }
   // little scale bump when the number changes
   function bumpCount(node) {
@@ -1236,9 +1246,13 @@
         const g = MISSION_GROUPS[groupIdx];
         const hdr = document.createElement("div");
         hdr.className = "mission-group-header";
-        hdr.textContent = g.label;
+        const lbl = document.createElement("span");
+        lbl.textContent = g.label;
+        const cnt = document.createElement("span");
+        cnt.className = "g-count";
+        hdr.append(lbl, cnt);
         el.missionGrid.appendChild(hdr);
-        hubGroups.push({ el: hdr, from: g.from, to: g.to });
+        hubGroups.push({ el: hdr, countEl: cnt, from: g.from, to: g.to });
         groupIdx++;
       }
       const available = mission.maps.length > 0;
@@ -1307,6 +1321,7 @@
           if (hc) applySRankUI(hc);
           nudge(srankBtn, ranked ? "burst" : "unrank");
           if (ranked) nudge(card, "ranked-glow");
+          updateProgress();
         });
         card.appendChild(srankBtn);
 
@@ -1320,8 +1335,93 @@
       hubCards.push({ card, mission, available, metaEl: meta, chipEl: chip, dotsEl: dots, srankBtn });
     }
     refreshHubCounts();
+    renderRecent();
     setupHubReveal();
     setupCardTilt();
+  }
+
+  // ---- Campaign progress: S-ranked missions, overall and per group ----
+  function updateProgress() {
+    const avail = hubCards.filter((h) => h.available);
+    const ranked = avail.filter((h) => getSRank(h.mission)).length;
+    el.progressTxt.textContent = ranked + " / " + avail.length + " S-ranked";
+    el.progressBar.style.width = (avail.length ? (ranked / avail.length) * 100 : 0) + "%";
+    el.progress.classList.toggle("done", avail.length > 0 && ranked === avail.length);
+    for (const g of hubGroups) {
+      const inG = avail.filter((h) => h.mission.number >= g.from && h.mission.number <= g.to);
+      const r = inG.filter((h) => getSRank(h.mission)).length;
+      g.countEl.textContent = inG.length ? r + " / " + inG.length : "";
+      g.el.classList.toggle("complete", inG.length > 0 && r === inG.length);
+    }
+  }
+
+  // ---- Recently opened missions ("Jump back in") ----
+  const RECENT_MAX = 4;
+  let recentCount = 0;
+  function loadRecent() {
+    try {
+      const a = JSON.parse(localStorage.getItem(STORAGE_PREFIX + "recent") || "[]");
+      return Array.isArray(a) ? a.filter((r) => r && typeof r.n === "number" && typeof r.at === "number") : [];
+    } catch (e) { return []; }
+  }
+  function noteRecent(mission) {
+    const list = loadRecent().filter((r) => r.n !== mission.number);
+    list.unshift({ n: mission.number, at: Date.now() });
+    try { localStorage.setItem(STORAGE_PREFIX + "recent", JSON.stringify(list.slice(0, RECENT_MAX))); } catch (e) {}
+  }
+  function timeAgo(at) {
+    const m = Math.max(0, (Date.now() - at) / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return Math.round(m) + "m ago";
+    if (m < 60 * 24) return Math.round(m / 60) + "h ago";
+    if (m < 60 * 24 * 7) return Math.round(m / 1440) + "d ago";
+    return formatSRankDate(at);
+  }
+  function renderRecent() {
+    const items = loadRecent()
+      .map((r) => ({ r, mission: MISSIONS.find((m) => m.number === r.n) }))
+      .filter((x) => x.mission && x.mission.maps.length);
+    el.recentRow.innerHTML = "";
+    recentCount = items.length;
+    for (const { r, mission } of items) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "recent-card";
+      const th = document.createElement("span");
+      th.className = "recent-thumb";
+      th.style.backgroundImage = "url('thumbnails/" + mission.number + ".webp')";
+      const body = document.createElement("span");
+      body.className = "recent-body";
+      const name = document.createElement("span");
+      name.className = "recent-name";
+      name.textContent = mission.name;
+      const meta = document.createElement("span");
+      meta.className = "recent-meta";
+      const marked = mission.maps.reduce((a, map) => a + stampCount(loadMarkers(map.id)), 0);
+      meta.textContent = (marked ? marked + " marked" : "No marks yet") + " \u00b7 " + timeAgo(r.at);
+      body.append(name, meta);
+      b.append(th, body);
+      b.addEventListener("click", () => goMission(mission, b));
+      el.recentRow.appendChild(b);
+    }
+    syncRecentVisibility();
+  }
+  function syncRecentVisibility() {
+    el.recent.hidden = !recentCount || !!el.missionSearch.value.trim();
+  }
+
+  // ---- First-open gesture guide ----
+  function guideSeen() {
+    try { return localStorage.getItem(STORAGE_PREFIX + "guide") === "1"; } catch (e) { return true; }
+  }
+  function showGuide() {
+    el.guide.hidden = false;
+    el.guideOkBtn.focus({ preventScroll: true });
+  }
+  function hideGuide() {
+    if (el.guide.hidden) return;
+    el.guide.hidden = true;
+    try { localStorage.setItem(STORAGE_PREFIX + "guide", "1"); } catch (e) {}
   }
 
   // Cards and group headers rise into place as they scroll into view. Everything waits
@@ -1433,6 +1533,7 @@
 
       applySRankUI(hc);
     }
+    updateProgress();
   }
 
   function filterHub() {
@@ -1459,6 +1560,7 @@
       g.el.hidden = !hasVisible;
     }
     el.hubEmpty.hidden = shown > 0;
+    syncRecentVisibility();
   }
 
   // Fade the splash out shortly after first paint (instantly if reduced motion).
@@ -1500,7 +1602,7 @@
     el.stage.classList.toggle("rail-collapsed", collapsed);
     el.railToggle.textContent = collapsed ? "›" : "‹";
     el.railToggle.title = collapsed ? "Expand toolbar" : "Collapse toolbar";
-    if (!collapsed) movePillThumb();
+    movePillThumb();
   }
   function toggleRail() {
     const collapsed = !el.toolbar.classList.contains("collapsed");
@@ -1576,6 +1678,7 @@
     document.body.classList.remove("in-map");
     el.hub.scrollTop = hubScroll;
     refreshHubCounts();  // reflect edits made inside the mission we just left
+    renderRecent();
     if (!inViewTransition) playEnter(el.hub);
   }
 
@@ -1600,6 +1703,9 @@
     setTool(state.tool);
     el.scroller.scrollTop = 0;
     setActiveFloor(0);
+    state.floors.forEach(updateFloorCount);   // seed the floor-pill counts
+    noteRecent(mission);
+    if (!guideSeen()) setTimeout(showGuide, reducedMotion() ? 0 : 750);
   }
 
   // Fit each floor to roughly the viewport height so a whole floor is visible
@@ -1661,10 +1767,26 @@
       const b = document.createElement("button");
       b.className = "floor-pill";
       b.type = "button";
-      b.textContent = map.name;
+      b.title = map.name;
+      const full = document.createElement("span");
+      full.className = "pill-full";
+      full.textContent = map.name;
+      const short = document.createElement("span");
+      short.className = "pill-short";
+      short.textContent = shortFloorName(map.name);
+      const n = document.createElement("span");
+      n.className = "pill-n";
+      b.append(full, short, n);
       b.addEventListener("click", () => jumpToFloor(idx));
       el.floorNav.appendChild(b);
     });
+  }
+  // "Ground" → G, "Floor 2" → F2, "Underground" → U: fits the collapsed rail.
+  function shortFloorName(name) {
+    const w = String(name).trim().split(/\s+/);
+    const last = w[w.length - 1];
+    const first = (w[0] && w[0][0] || "?").toUpperCase();
+    return w.length > 1 && /^\d+$/.test(last) ? first + last : first;
   }
   function jumpToFloor(idx) {
     const f = state.floors[idx];
@@ -2213,6 +2335,9 @@
       '<br><span class="foot-legal">© VOID Interactive. Ready or Not is a trademark of VOID Interactive. This is a fan-made project.</span>';
 
     el.railToggle.addEventListener("click", toggleRail);
+    el.helpBtn.addEventListener("click", showGuide);
+    el.guideOkBtn.addEventListener("click", hideGuide);
+    el.guide.addEventListener("click", (e) => { if (e.target === el.guide) hideGuide(); });
     el.moreToggle.addEventListener("click", toggleMore);
     el.backBtn.addEventListener("click", goHub);
     el.stampXBtn.addEventListener("click", () => setStampType("x"));
@@ -2260,6 +2385,9 @@
 
     document.addEventListener("keydown", (e) => {
       if (!el.hub.hidden) return; // no shortcuts on the hub
+      if (!el.guide.hidden) { if (e.key === "Escape" || e.key === "Enter") hideGuide(); return; }
+      if (e.key === "?") { showGuide(); return; }
+      if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
       const z = e.key.toLowerCase() === "z";
       if ((e.ctrlKey || e.metaKey) && z && e.shiftKey) { e.preventDefault(); redo(); }
       else if ((e.ctrlKey || e.metaKey) && z) { e.preventDefault(); undo(); }

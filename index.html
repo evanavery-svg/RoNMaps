@@ -52,7 +52,15 @@
         <input id="missionSearch" class="mission-search" type="search"
                inputmode="search" placeholder="Search missions…" aria-label="Search missions" />
       </div>
+      <div class="progress" id="progress" title="Missions you've marked as S-ranked">
+        <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+        <span class="progress-txt" id="progressTxt"></span>
+      </div>
     </header>
+    <section class="recent" id="recent" hidden>
+      <h2 class="recent-title">Jump back in</h2>
+      <div class="recent-row" id="recentRow"></div>
+    </section>
     <div class="mission-grid" id="missionGrid"></div>
     <p class="hub-empty" id="hubEmpty" hidden>No missions match your search.</p>
     <footer class="app-foot" id="appFoot"></footer>
@@ -74,11 +82,49 @@
     </div>
   </div>
 
+  <!-- One-time gesture guide (reopen with the ? button or the ? key) -->
+  <div class="modal guide" id="guide" hidden>
+    <div class="sheet guide-sheet">
+      <h2 class="sheet-title">Marking up a map</h2>
+      <div class="guide-grid">
+        <div class="g-item">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="5" class="f"/><circle cx="16" cy="16" r="11" class="s"/></svg>
+          <b>Tap</b><span>Stamp a <strong>W</strong> on a cleared room</span>
+        </div>
+        <div class="g-item">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="5" class="f"/><circle cx="16" cy="16" r="11" class="s arc"/></svg>
+          <b>Hold</b><span>Stamp an <strong>X</strong></span>
+        </div>
+        <div class="g-item">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="7" y="7" width="18" height="18" rx="2" class="s dash"/><circle cx="25" cy="25" r="3.5" class="f"/></svg>
+          <b>Tap a mark</b><span>Drag to move, corner to resize, hold to delete</span>
+        </div>
+        <div class="g-item">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M13 13 5 5m0 0v6m0-6h6M19 19l8 8m0 0v-6m0 6h-6" class="s"/></svg>
+          <b>Pinch or double-tap</b><span>Zoom the blueprint</span>
+        </div>
+        <div class="g-item">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4v24m0-24-5 5m5-5 5 5M16 28l-5-5m5 5 5-5" class="s"/></svg>
+          <b>Scroll</b><span>Move between floors</span>
+        </div>
+        <div class="g-item">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 24c6-14 10 2 16-8m0 0-5 0m5 0 0 5" class="s"/></svg>
+          <b>Arrow &amp; Pen</b><span>Drag to draw routes and notes</span>
+        </div>
+      </div>
+      <p class="guide-keys">Keys: <kbd>X</kbd> <kbd>W</kbd> stamp · <kbd>A</kbd> arrow · <kbd>P</kbd> pen · <kbd>E</kbd> eraser · <kbd>⌘Z</kbd> undo · <kbd>↑</kbd><kbd>↓</kbd> floors · <kbd>Esc</kbd> back</p>
+      <button id="guideOkBtn" class="tool guide-ok" type="button">Got it</button>
+    </div>
+  </div>
+
   <!-- ===================== MAP VIEW ===================== -->
   <header class="toolbar" id="toolbar" hidden>
     <button id="railToggle" class="rail-toggle" type="button" title="Toggle toolbar">‹</button>
-    <div class="tb-group tb-nav">
-      <button id="backBtn" class="tool" title="Back to missions">‹<span class="tool-txt"> Missions</span></button>
+    <div class="tb-group tb-nav tb-core">
+      <button id="backBtn" class="tool" title="Back to missions">
+        <span class="tool-x"><span class="when-open">‹</span><span class="when-closed">⌂</span></span><span class="tool-txt"> Missions</span>
+      </button>
+      <button id="helpBtn" class="tool help-btn" type="button" title="Gestures &amp; shortcuts" aria-label="Gestures and shortcuts">?</button>
     </div>
     <div class="tb-group tb-maps">
       <span class="tb-title" id="missionTitle"></span>
@@ -86,13 +132,7 @@
 
     <div class="tb-group tb-colors" id="swatches" role="group" aria-label="Marker color"></div>
 
-    <div class="tb-group tb-actions">
-      <button id="undoBtn" class="tool" title="Undo">↶<span class="tool-txt">Undo</span></button>
-    </div>
-
-    <button id="moreToggle" class="more-toggle" type="button" title="More tools">⋯</button>
-
-    <div class="tb-group tb-tools tb-extra">
+    <div class="tb-group tb-tools tb-core">
       <button id="stampXBtn" class="tool active" aria-pressed="true" title="Stamp X (tap the map)">
         <span class="tool-x">✕</span><span class="tool-txt">Stamp</span>
       </button>
@@ -109,6 +149,12 @@
         <span class="tool-ico">▭</span><span class="tool-txt">Eraser</span>
       </button>
     </div>
+
+    <div class="tb-group tb-actions tb-core">
+      <button id="undoBtn" class="tool" title="Undo">↶<span class="tool-txt">Undo</span></button>
+    </div>
+
+    <button id="moreToggle" class="more-toggle" type="button" title="More tools">⋯</button>
 
     <div class="tb-group tb-extra">
       <label class="color-chip" title="Pick a custom color">
@@ -144,7 +190,7 @@
       </button>
     </div>
 
-    <div class="tb-group tb-floornav" id="floorNav" role="group" aria-label="Jump to floor"></div>
+    <div class="tb-group tb-floornav tb-core" id="floorNav" role="group" aria-label="Jump to floor"></div>
   </header>
 
   <main class="stage" id="stage" hidden>
