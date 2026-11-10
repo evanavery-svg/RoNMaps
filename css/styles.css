@@ -606,6 +606,38 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   from { box-shadow: 0 0 0 0 rgba(240,180,41,.55), 0 0 30px rgba(240,180,41,.35); }
   to   { box-shadow: 0 0 0 14px rgba(240,180,41,0), 0 0 30px rgba(240,180,41,0); }
 }
+/* S-ranked cards: a gold sheen crosses the card every few seconds */
+.mission-card.s-ranked:not(.thumb-pending)::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(115deg, transparent 38%, rgba(255,215,106,.22) 50%, transparent 62%);
+  transform: translateX(-130%);
+  animation: foil 6.5s ease-in-out infinite;
+}
+.mission-card.s-ranked:nth-child(3n)::after   { animation-delay: 1.3s; }
+.mission-card.s-ranked:nth-child(3n+1)::after { animation-delay: 2.7s; }
+@keyframes foil { 0%, 78% { transform: translateX(-130%); } 100% { transform: translateX(130%); } }
+
+/* Depth: card art drifts against the card as it crosses the screen. Scroll-driven and
+   compositor-only (the separate `translate` property stacks with the hover transform). */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* The card clips its art (overflow: hidden), which would make the card the art's own
+       scroller. So the CARD's progress through the hub is named and the art follows that. */
+    .mission-card { view-timeline: --card block; }
+    .mission-card .m-thumb { inset: -7% 0; }
+    .mission-card .m-thumb.loaded {
+      animation: thumb-parallax linear both;
+      animation-timeline: --card;
+      animation-range: entry 0% exit 100%;
+    }
+    .mission-card.in .m-thumb.loaded {
+      animation: art-settle .75s var(--d, 0ms) cubic-bezier(.22,1,.36,1) both, thumb-parallax linear both;
+      animation-timeline: auto, --card;
+      animation-range: normal, entry 0% exit 100%;
+    }
+    @keyframes thumb-parallax { from { translate: 0 -6%; } to { translate: 0 6%; } }
+  }
+}
 .m-chip { display: inline-block; }
 .m-chip.bump { animation: count-bump .45s cubic-bezier(.34,1.56,.64,1); }
 
@@ -1040,6 +1072,59 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   transition: opacity .25s ease, translate .3s cubic-bezier(.22,1,.36,1), scale .3s cubic-bezier(.22,1,.36,1);
 }
 .zoom-pill.show { opacity: 1; translate: none; scale: none; }
+
+/* ---- Mission briefing card ---- */
+.briefing {
+  position: absolute; inset: 0; z-index: 6; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(6,8,11,.86) 0%, rgba(6,8,11,.62) 60%, rgba(6,8,11,.4) 100%);
+  overflow: hidden;
+}
+.briefing.play { animation: brief-life 1.5s ease both; }
+@keyframes brief-life { 0% { opacity: 0; } 10% { opacity: 1; } 74% { opacity: 1; } 100% { opacity: 0; } }
+.brief-box {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 28px 44px; max-width: 86%; text-align: center; color: #fff;
+}
+/* corner brackets that snap inward */
+.brief-box::before, .brief-box::after {
+  content: ""; position: absolute; width: 22px; height: 22px; border: 2px solid var(--accent);
+}
+.brief-box::before { left: 0; top: 0; border-right: 0; border-bottom: 0; }
+.brief-box::after { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+.briefing.play .brief-box::before { animation: bracket-a .5s cubic-bezier(.34,1.56,.64,1) both; }
+.briefing.play .brief-box::after  { animation: bracket-b .5s cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes bracket-a { from { opacity: 0; transform: translate(-18px,-18px); } to { opacity: 1; transform: none; } }
+@keyframes bracket-b { from { opacity: 0; transform: translate(18px,18px); } to { opacity: 1; transform: none; } }
+.brief-no {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .34em; text-transform: uppercase; color: var(--accent);
+}
+.brief-name {
+  font-family: var(--mono); font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  font-size: clamp(20px, 4.2vw, 40px); line-height: 1.15;
+  text-shadow: 0 0 24px rgba(230,57,70,.35);
+}
+.brief-meta {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: rgba(255,255,255,.6);
+  white-space: pre-wrap;
+}
+.briefing.play .brief-no   { animation: brief-up .45s .05s cubic-bezier(.22,1,.36,1) both; }
+.briefing.play .brief-meta { animation: brief-up .45s .3s cubic-bezier(.22,1,.36,1) both; }
+@keyframes brief-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.brief-scan {
+  position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent) 20%, #fff 50%, var(--accent) 80%, transparent);
+  box-shadow: 0 0 18px 2px rgba(230,57,70,.55);
+  opacity: 0;
+}
+.briefing.play .brief-scan { animation: brief-scan 1s .08s cubic-bezier(.45,0,.55,1) both; }
+@keyframes brief-scan {
+  0% { opacity: 0; transform: translateY(0); } 8% { opacity: 1; } 92% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(100vh); }
+}
+
+/* full-screen particle layer for the S-rank celebration (created on demand) */
+.fx-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 85; pointer-events: none; }
 .floor-label::before {
   content: ""; display: inline-block; vertical-align: middle;
   width: 3px; height: 12px; margin-right: 10px;
@@ -1130,6 +1215,13 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   animation: pulse-ring .45s cubic-bezier(.16,.7,.3,1) forwards;
 }
 
+.stamp-sparks { fill: none; pointer-events: none; animation: stamp-sparks .34s cubic-bezier(.16,.7,.3,1) forwards; }
+@keyframes stamp-sparks {
+  from { transform: scale(.35); opacity: 1; }
+  60%  { opacity: 1; }
+  to   { transform: scale(1.25); opacity: 0; }
+}
+
 /* A removed mark leaves a ghost that swells, spins and shrinks away */
 .mark-ghost, .mark-ghost * { pointer-events: none !important; }
 .mark-ghost {
@@ -1211,6 +1303,26 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
 .splash.gone { opacity: 0; visibility: hidden; pointer-events: none; }
 .splash-inner { text-align: center; transition: transform .55s cubic-bezier(.55,0,.2,1), filter .5s ease, opacity .45s ease; }
 .splash.gone .splash-inner { transform: scale(1.15); filter: blur(6px); opacity: 0; }
+/* targeting reticle: the ring draws, the ticks close in, then it locks (flash) */
+.reticle { display: block; width: 88px; height: 88px; margin: 0 auto 22px; overflow: visible;
+  animation: reticle-turn .8s cubic-bezier(.22,1,.36,1) both; }
+.reticle * { fill: none; stroke-linecap: round; }
+.r-ring { stroke: var(--text); stroke-width: 1.5; opacity: .85; stroke-dasharray: 214; stroke-dashoffset: 214;
+  animation: ring-draw .7s cubic-bezier(.65,0,.35,1) forwards, ring-lock .5s .72s ease-out; }
+.r-inner { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 7; opacity: 0;
+  transform-origin: 50px 50px; animation: inner-spin 1.4s .15s cubic-bezier(.22,1,.36,1) both; }
+.r-ticks { stroke: var(--accent); stroke-width: 2.5; transform-origin: 50px 50px;
+  animation: ticks-in .55s .2s cubic-bezier(.34,1.56,.64,1) both; }
+.r-dot { fill: var(--accent); stroke: none; transform-origin: 50px 50px;
+  animation: dot-in .4s .55s cubic-bezier(.34,1.56,.64,1) both, dot-pulse .9s .95s ease-in-out infinite alternate; }
+@keyframes reticle-turn { from { transform: rotate(-90deg) scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes ring-draw { to { stroke-dashoffset: 0; } }
+@keyframes ring-lock { 0% { stroke: var(--accent); stroke-width: 4; opacity: 1; } 100% { stroke: var(--text); stroke-width: 1.5; opacity: .85; } }
+@keyframes inner-spin { from { opacity: 0; transform: rotate(-180deg) scale(.6); } to { opacity: .9; transform: none; } }
+@keyframes ticks-in { from { opacity: 0; transform: scale(1.6); } to { opacity: 1; transform: none; } }
+@keyframes dot-in { from { transform: scale(0); } to { transform: none; } }
+@keyframes dot-pulse { from { opacity: 1; } to { opacity: .35; } }
+
 .splash-title {
   font-family: var(--mono);
   font-size: clamp(22px, 5vw, 34px);

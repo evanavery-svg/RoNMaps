@@ -26,7 +26,13 @@
   <!-- Brief branded splash on first load (skipped under reduced motion) -->
   <div class="splash" id="splash">
     <div class="splash-inner">
-      <div class="splash-title">READY OR NOT</div>
+      <svg class="reticle" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="34" class="r-ring"/>
+        <circle cx="50" cy="50" r="23" class="r-inner"/>
+        <path d="M50 3v19M50 78v19M3 50h19M78 50h19" class="r-ticks"/>
+        <circle cx="50" cy="50" r="3" class="r-dot"/>
+      </svg>
+      <div class="splash-title" id="splashTitle">READY OR NOT</div>
       <div class="splash-rule"></div>
     </div>
   </div>
@@ -218,6 +224,15 @@
     <div class="floor-scroll" id="floorScroll"></div>
     <div class="hint" id="hint">Tap to stamp · scroll for floors · double-tap to zoom.</div>
     <div class="zoom-pill" id="zoomPill" aria-hidden="true">1.0×</div>
+    <!-- brief title card when a mission opens (never blocks taps) -->
+    <div class="briefing" id="briefing" hidden aria-hidden="true">
+      <i class="brief-scan"></i>
+      <div class="brief-box">
+        <span class="brief-no" id="briefNo"></span>
+        <span class="brief-name" id="briefName"></span>
+        <span class="brief-meta" id="briefMeta"></span>
+      </div>
+    </div>
   </main>
 
   <script src="js/maps.js"></script>

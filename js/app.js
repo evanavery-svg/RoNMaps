@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.44";
+  const APP_VERSION = "0.45";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -28,6 +28,11 @@
     settingsDropdown: document.getElementById("settingsDropdown"),
     offlineBadge: document.getElementById("offlineBadge"),
     toast: document.getElementById("toast"),
+    splashTitle: document.getElementById("splashTitle"),
+    briefing: document.getElementById("briefing"),
+    briefNo: document.getElementById("briefNo"),
+    briefName: document.getElementById("briefName"),
+    briefMeta: document.getElementById("briefMeta"),
     recent: document.getElementById("recent"),
     recentRow: document.getElementById("recentRow"),
     progress: document.getElementById("progress"),
@@ -208,6 +213,7 @@
     updateSizeGroup();
     buzz(15);
     spawnPulse(floor, x, y, state.color);
+    spawnSparks(floor, x, y, state.color, m.size);
     // clear the flag so later re-renders don't replay the animation
     clearTimeout(placingTimer);
     placingTimer = setTimeout(() => { justPlacedId = null; }, 260);
@@ -226,6 +232,25 @@
     c.addEventListener("animationend", kill);
     setTimeout(kill, 900);           // belt-and-braces if the event never fires
     floor.svg.appendChild(c);
+  }
+  // Six short streaks flung outward from the impact point; gone in a third of a second.
+  function spawnSparks(floor, x, y, color, size) {
+    if (reducedMotion()) return;
+    const g = document.createElementNS(SVGNS, "g");
+    g.setAttribute("class", "stamp-sparks");
+    g.setAttribute("stroke", color);
+    g.setAttribute("stroke-width", Math.max(3, size * 0.07));
+    g.setAttribute("stroke-linecap", "round");
+    const r1 = size * 0.62, r2 = size * 1.0, off = Math.random() * Math.PI;
+    for (let i = 0; i < 6; i++) {
+      const a = off + (i / 6) * Math.PI * 2;
+      g.appendChild(makeLine(x + Math.cos(a) * r1, y + Math.sin(a) * r1, x + Math.cos(a) * r2, y + Math.sin(a) * r2));
+    }
+    g.style.transformOrigin = x + "px " + y + "px";
+    const kill = () => g.remove();
+    g.addEventListener("animationend", kill);
+    setTimeout(kill, 700);
+    floor.svg.appendChild(g);
   }
   function deleteMarker(floor, id) {
     const i = floor.markers.findIndex((m) => m.id === id);
@@ -1335,6 +1360,7 @@
           nudge(srankBtn, ranked ? "burst" : "unrank");
           if (ranked) nudge(card, "ranked-glow");
           updateProgress();
+          if (ranked) celebrateRank(mission, srankBtn);
         });
         card.appendChild(srankBtn);
 
@@ -1353,11 +1379,167 @@
     setupCardTilt();
   }
 
+  // ---- Effects: text decode, counting numbers, star confetti ----
+  const SCRAMBLE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#/<>_";
+  // Characters settle left-to-right out of noise, like a field being decrypted.
+  function scramble(node, text, dur) {
+    if (!node) return;
+    if (reducedMotion()) { node.textContent = text; return; }
+    cancelAnimationFrame(node._scr);
+    const t0 = performance.now();
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / dur);
+      const settled = Math.floor(p * text.length);
+      let out = text.slice(0, settled);
+      for (let i = settled; i < text.length; i++) {
+        const ch = text[i];
+        out += /\s/.test(ch) ? ch : SCRAMBLE_CHARS[(Math.random() * SCRAMBLE_CHARS.length) | 0];
+      }
+      node.textContent = out;
+      if (p < 1) node._scr = requestAnimationFrame(step);
+    };
+    node._scr = requestAnimationFrame(step);
+  }
+
+  let progShown = 0, progTarget = 0, progTotal = 0, progRaf = 0;
+  function writeProgress(n) { el.progressTxt.textContent = n + " / " + progTotal + " S-ranked"; }
+  function countProgressTo(to) {
+    cancelAnimationFrame(progRaf);
+    const from = progShown;
+    if (reducedMotion() || from === to) { progShown = to; writeProgress(to); return; }
+    const dur = Math.min(700, 250 + 40 * Math.abs(to - from)), t0 = performance.now();
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / dur);
+      progShown = Math.round(from + (to - from) * (1 - Math.pow(1 - p, 3)));
+      writeProgress(progShown);
+      if (p < 1) progRaf = requestAnimationFrame(step);
+    };
+    progRaf = requestAnimationFrame(step);
+  }
+  // Played once when the hub is revealed: the bar fills and the number counts up.
+  function replayProgress() {
+    if (reducedMotion() || !progTarget) return;
+    const w = el.progressBar.style.width;
+    el.progressBar.style.transition = "none";
+    el.progressBar.style.width = "0%";
+    void el.progressBar.offsetWidth;
+    el.progressBar.style.transition = "";
+    progShown = 0; writeProgress(0);
+    setTimeout(() => { el.progressBar.style.width = w; countProgressTo(progTarget); }, 350);
+  }
+
+  // One throwaway full-screen canvas; it removes itself when the last particle dies.
+  let fx = null;
+  const FX_COLORS = ["#f0b429", "#ffd76a", "#fff3c4", "#f59e0b", "#e63946"];
+  function fxEnsure() {
+    if (fx) return fx;
+    const canvas = document.createElement("canvas");
+    canvas.className = "fx-canvas";
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(window.innerWidth * dpr);
+    canvas.height = Math.round(window.innerHeight * dpr);
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    fx = { canvas, ctx, parts: [], raf: 0, last: 0 };
+    return fx;
+  }
+  function fxAdd(x, y, count, opts) {
+    if (reducedMotion()) return;
+    const f = fxEnsure(), o = opts || {};
+    for (let i = 0; i < count; i++) {
+      const a = (o.angle != null ? o.angle : -Math.PI / 2) + (Math.random() - 0.5) * (o.spread != null ? o.spread : Math.PI * 2);
+      const sp = (o.speed || 420) * (0.35 + Math.random() * 0.65);
+      f.parts.push({
+        x: x + (Math.random() - 0.5) * (o.jitter || 0), y,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 12,
+        size: 4 + Math.random() * 7, life: 0, ttl: 0.8 + Math.random() * 0.8,
+        color: FX_COLORS[(Math.random() * FX_COLORS.length) | 0],
+        star: Math.random() < 0.5,
+      });
+    }
+    if (!f.raf) { f.last = performance.now(); f.raf = requestAnimationFrame(fxTick); }
+  }
+  function fxTick(now) {
+    const f = fx;
+    if (!f) return;
+    const dt = Math.min(0.04, (now - f.last) / 1000);
+    f.last = now;
+    const c = f.ctx;
+    c.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    f.parts = f.parts.filter((p) => (p.life += dt) < p.ttl);
+    for (const p of f.parts) {
+      p.vy += 900 * dt; p.vx *= 0.985;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+      const k = p.life / p.ttl;
+      c.save();
+      c.globalAlpha = 1 - k * k;
+      c.translate(p.x, p.y); c.rotate(p.rot);
+      c.fillStyle = p.color;
+      if (p.star) {
+        c.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const r = i % 2 ? p.size * 0.45 : p.size, a = (i / 10) * Math.PI * 2;
+          c.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        c.closePath(); c.fill();
+      } else {
+        c.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+      }
+      c.restore();
+    }
+    if (f.parts.length) { f.raf = requestAnimationFrame(fxTick); return; }
+    f.canvas.remove();
+    fx = null;
+  }
+  // A star burst from the button; a full shower when that finishes a group (or everything).
+  function celebrateRank(mission, btn) {
+    const r = btn.getBoundingClientRect();
+    fxAdd(r.left + r.width / 2, r.top + r.height / 2, 34, { speed: 460 });
+    const avail = hubCards.filter((h) => h.available);
+    const allDone = avail.every((h) => getSRank(h.mission));
+    const g = MISSION_GROUPS.find((x) => mission.number >= x.from && mission.number <= x.to);
+    const groupDone = g && avail.filter((h) => h.mission.number >= g.from && h.mission.number <= g.to)
+      .every((h) => getSRank(h.mission));
+    if (!allDone && !groupDone) return;
+    const w = window.innerWidth;
+    for (let i = 0; i < (allDone ? 5 : 3); i++) {
+      setTimeout(() => fxAdd(w / 2, -10, allDone ? 70 : 50, { angle: Math.PI / 2, spread: Math.PI * 0.9, speed: 520, jitter: w * 0.9 }), i * 180);
+    }
+    buzz([20, 60, 20, 60, 40]);
+    toast(allDone ? "\u2605 Every mission S-ranked" : "\u2605 " + g.label + " complete");
+  }
+
+  // ---- Mission briefing card: shown briefly as a mission opens ----
+  let briefTimer = 0;
+  function playBriefing(mission) {
+    clearTimeout(briefTimer);
+    if (reducedMotion()) return;
+    const n = mission.maps.length;
+    const marked = mission.maps.reduce((a, map) => a + stampCount(loadMarkers(map.id)), 0);
+    el.briefNo.textContent = "Mission " + String(mission.number).padStart(2, "0");
+    el.briefMeta.textContent = n + (n === 1 ? " floor" : " floors") + "  \u00b7  " + (marked ? marked + " marked" : "no marks yet") +
+      (getSRank(mission) ? "  \u00b7  \u2605 S rank" : "");
+    el.briefing.hidden = false;
+    el.briefing.classList.remove("play");
+    void el.briefing.offsetWidth;
+    el.briefing.classList.add("play");
+    scramble(el.briefName, mission.name, 520);
+    briefTimer = setTimeout(stopBriefing, 1500);
+  }
+  function stopBriefing() {
+    clearTimeout(briefTimer);
+    el.briefing.hidden = true;
+    el.briefing.classList.remove("play");
+  }
+
   // ---- Campaign progress: S-ranked missions, overall and per group ----
   function updateProgress() {
     const avail = hubCards.filter((h) => h.available);
     const ranked = avail.filter((h) => getSRank(h.mission)).length;
-    el.progressTxt.textContent = ranked + " / " + avail.length + " S-ranked";
+    progTarget = ranked; progTotal = avail.length;
+    countProgressTo(ranked);
     el.progressBar.style.width = (avail.length ? (ranked / avail.length) * 100 : 0) + "%";
     el.progress.classList.toggle("done", avail.length > 0 && ranked === avail.length);
     for (const g of hubGroups) {
@@ -1471,6 +1653,7 @@
   }
   function startHubReveal() {
     document.body.classList.add("hub-ready");
+    replayProgress();
     hubRevealReady = true;
     flushReveal();
   }
@@ -1689,7 +1872,7 @@
       setTimeout(() => { el.splash.hidden = true; }, 650);
     };
     if (reducedMotion()) { el.splash.hidden = true; startHubReveal(); return; }
-    setTimeout(hide, 900);
+    setTimeout(hide, 1100);
   }
 
   // Restart a CSS entrance animation on an element that was just shown.
@@ -1787,6 +1970,7 @@
   }
 
   function showHub() {
+    stopBriefing();
     teardownFloors();
     state.mission = null;
     el.stage.hidden = true;
@@ -1830,6 +2014,7 @@
     updateNotesBadge();
     state.floors.forEach(updateFloorCount);   // seed the floor-pill counts
     noteRecent(mission);
+    playBriefing(mission);
     if (!guideSeen()) setTimeout(showGuide, reducedMotion() ? 0 : 750);
   }
 
@@ -2578,6 +2763,7 @@
     // Start on the hub so the user picks a mission first.
     showHub();
 
+    scramble(el.splashTitle, "READY OR NOT", 650);
     dismissSplash();
     checkSharedLink();   // opened from a shared plan link?
     registerServiceWorker();
