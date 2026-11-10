@@ -39,6 +39,13 @@
   --glow: rgba(230,57,70,.15);
   --stage-dot: rgba(255,255,255,.05);
   --stage-vig: rgba(0,0,0,.35);
+  /* surface overlays: light-on-dark here, flipped to dark-on-light in the day theme */
+  --hover: rgba(255,255,255,.06);
+  --group-bg: rgba(255,255,255,.03);
+  --edge-strong: rgba(255,255,255,.18);
+  --swatch-edge: rgba(255,255,255,.12);
+  --swatch-ring: #fff;
+  --scroll-thumb: rgba(255,255,255,.12);
 }
 
 :root[data-theme="night"] {
@@ -95,6 +102,12 @@
   --glow: rgba(220,38,38,.1);
   --stage-dot: rgba(0,0,0,.08);
   --stage-vig: rgba(0,0,0,.06);
+  --hover: rgba(0,0,0,.055);
+  --group-bg: rgba(0,0,0,.04);
+  --edge-strong: rgba(0,0,0,.24);
+  --swatch-edge: rgba(0,0,0,.22);
+  --swatch-ring: #111;
+  --scroll-thumb: rgba(0,0,0,.14);
 }
 
 .mono, .tb-label, .m-num, .floor-label, .floor-pill, .m-meta {
@@ -159,7 +172,7 @@ body.in-map .ambient {
   -webkit-overflow-scrolling: touch;
   padding: max(24px, env(safe-area-inset-top)) 20px 40px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,.12) transparent;
+  scrollbar-color: var(--scroll-thumb) transparent;
 }
 .hub-head { text-align: center; margin: 8px auto 24px; max-width: 960px; }
 .hub-top { display: flex; align-items: center; justify-content: center; gap: 12px; position: relative; z-index: 5; }
@@ -237,6 +250,13 @@ body.hub-ready .hub-title { animation: title-shine 1.5s .45s cubic-bezier(.4,0,.
 }
 .mission-search::placeholder { color: var(--muted); transition: opacity .2s ease; }
 .mission-search:focus::placeholder { opacity: .5; }
+.mission-search::-webkit-search-cancel-button {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px; margin-left: 8px; cursor: pointer; opacity: .65;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8a8a' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6 6 18'/%3E%3C/svg%3E") center / 14px no-repeat;
+  transition: opacity .15s ease;
+}
+.mission-search::-webkit-search-cancel-button:hover { opacity: 1; }
 
 .hub-empty { text-align: center; color: var(--muted); margin: 24px 0; animation: fade-up .35s cubic-bezier(.22,1,.36,1); }
 @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -253,7 +273,7 @@ body.hub-ready .hub-filters { animation: head-in .7s .12s cubic-bezier(.22,1,.36
   cursor: pointer; position: relative; overflow: hidden;
   transition: background-color .2s ease, color .2s ease, border-color .2s ease, transform .25s cubic-bezier(.34,1.56,.64,1);
 }
-.chip:hover { color: var(--text); border-color: rgba(255,255,255,.18); }
+.chip:hover { color: var(--text); border-color: var(--edge-strong); }
 .chip:active { transform: scale(.94); transition-duration: .08s; }
 .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: 0 2px 12px var(--glow); animation: tool-pop .4s cubic-bezier(.34,1.56,.64,1); }
 
@@ -300,7 +320,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
 }
 .recent-row::-webkit-scrollbar { display: none; }
 .recent-card {
-  flex: 0 0 auto; width: 236px; scroll-snap-align: start;
+  flex: 0 0 auto; width: 290px; max-width: 84vw; scroll-snap-align: start;
   display: flex; align-items: center; gap: 12px;
   padding: 8px 12px 8px 8px;
   background: var(--card-bg); color: var(--text);
@@ -313,7 +333,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   content: "\203A"; margin-left: auto; color: var(--muted); font-size: 18px;
   transition: transform .25s cubic-bezier(.34,1.56,.64,1), color .2s ease;
 }
-.recent-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.18); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.recent-card:hover { transform: translateY(-2px); border-color: var(--edge-strong); box-shadow: 0 8px 24px var(--shadow); }
 .recent-card:hover::after { transform: translateX(3px); color: var(--text); }
 .recent-card:active { transform: scale(.975); transition-duration: .08s; }
 .recent-thumb {
@@ -323,7 +343,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
 }
 .recent-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .recent-name { font-weight: 700; font-size: 14px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.recent-meta { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.recent-meta { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---- Notes ---- */
 .notes-sheet { width: min(520px, 100%); }
@@ -341,11 +361,12 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
 .notes-text::placeholder { color: var(--muted); }
 .notes-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
 .notes-hint { font-size: 11px; color: var(--muted); }
-.notes-done {
+.tool.notes-done {
   background: var(--accent); color: var(--on-accent); border-radius: var(--r);
-  min-height: 38px; padding: 0 18px; font-weight: 700;
+  min-height: 38px; padding: 0 20px; font-weight: 700;
+  box-shadow: 0 4px 14px var(--glow);
 }
-.notes-done:hover { background: var(--accent); filter: brightness(1.1); }
+.tool.notes-done:hover { background: var(--accent); filter: brightness(1.1); }
 .notes-btn.has-notes::after {
   content: ""; position: absolute; top: 5px; right: 5px;
   width: 6px; height: 6px; border-radius: 50%;
@@ -363,7 +384,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto; column-gap: 10px;
   align-items: center;
   padding: 10px; border-radius: var(--r);
-  background: rgba(255,255,255,.03); border: 1px solid var(--line);
+  background: var(--group-bg); border: 1px solid var(--line);
   animation: fade-up .45s cubic-bezier(.22,1,.36,1) both;
 }
 .g-item:nth-child(2) { animation-delay: .05s } .g-item:nth-child(3) { animation-delay: .1s }
@@ -383,15 +404,16 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   background: var(--toolbar-2); border: 1px solid var(--line); color: var(--text);
 }
 @media (hover: hover) and (pointer: fine) { .guide-keys { display: block; } }
-.guide-ok {
+.tool.guide-ok {
   width: 100%; margin-top: 14px; justify-content: center;
-  min-height: var(--tap); font-size: 14px; font-weight: 700;
+  min-height: 44px; font-size: 14px; font-weight: 700;
   background: var(--accent); color: var(--on-accent); border-radius: var(--r);
+  box-shadow: 0 4px 14px var(--glow);
 }
-.guide-ok:hover { background: var(--accent); filter: brightness(1.1); }
+.tool.guide-ok:hover { background: var(--accent); filter: brightness(1.1); }
+.tool.guide-ok:focus-visible, .tool.notes-done:focus-visible { outline-color: var(--text); }
 @media (max-width: 560px) {
   .guide-grid { grid-template-columns: 1fr; gap: 6px; }
-  .recent-card { width: 210px; }
 }
 
 /* ---- Theme switcher ---- */
@@ -419,7 +441,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   cursor: pointer;
   transition: background-color .15s ease, color .25s ease;
 }
-.theme-seg button:hover { color: var(--text); background: rgba(255,255,255,.04); }
+.theme-seg button:hover { color: var(--text); background: var(--hover); }
 .theme-seg button.active { color: var(--on-accent); }
 .theme-cycle { justify-content: center; }
 
@@ -484,6 +506,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   font: inherit;
   transition: border-color .2s ease, transform .25s cubic-bezier(.22,.61,.36,1), box-shadow .25s ease;
 }
+.mission-card.available { background: #15171a; border-color: rgba(255,255,255,.07); }
 .mission-card .m-thumb {
   position: absolute; inset: 0; z-index: 0;
   background-size: cover; background-position: center 25%;
@@ -725,7 +748,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   transition: background-color .15s ease, color .15s ease;
 }
 .rail-toggle:hover, .rail-toggle:focus-visible {
-  background: rgba(255,255,255,.06); color: var(--text);
+  background: var(--hover); color: var(--text);
 }
 
 .toolbar.rail-anim:not(.collapsed) > :not(.rail-toggle) {
@@ -774,7 +797,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   padding: 0;
   transition: background-color .15s ease, color .15s ease;
 }
-.more-toggle:hover { background: rgba(255,255,255,.06); color: var(--text); }
+.more-toggle:hover { background: var(--hover); color: var(--text); }
 .toolbar:not(.show-more) .tb-extra { display: none; }
 .toolbar.show-more .more-toggle { color: var(--accent); border-color: var(--accent); }
 .toolbar.show-more .tb-extra { animation: extra-in .34s cubic-bezier(.22,1,.36,1) both; }
@@ -787,7 +810,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
 
 .tb-group {
   display: flex; flex-direction: column; align-items: stretch; gap: 2px;
-  background: rgba(255,255,255,.03);
+  background: var(--group-bg);
   border-radius: 6px;
   padding: 4px;
 }
@@ -870,7 +893,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   font-size: 11px; cursor: pointer;
   transition: background-color .15s ease, color .25s ease, border-color .25s ease, transform .15s ease;
 }
-.floor-pill:hover { background: rgba(255,255,255,.04); color: var(--text); }
+.floor-pill:hover { background: var(--hover); color: var(--text); }
 .floor-pill:active { transform: scale(.95); transition-duration: .08s; }
 .floor-pill.active {
   background: transparent; border-color: transparent; color: var(--on-accent);
@@ -880,7 +903,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
 .pill-n {
   font-size: 9px; letter-spacing: 0; line-height: 1;
   padding: 2px 5px; border-radius: 999px;
-  background: rgba(255,255,255,.1); color: var(--text);
+  background: var(--edge-strong); color: var(--text);
   animation: count-bump .45s cubic-bezier(.34,1.56,.64,1);
 }
 .floor-pill.active .pill-n { background: rgba(0,0,0,.25); color: var(--on-accent); }
@@ -916,7 +939,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   transition: background-color .15s ease, border-color .15s ease,
               color .15s ease, opacity .15s ease;
 }
-.tool:hover { background: rgba(255,255,255,.06); }
+.tool:hover { background: var(--hover); }
 .tool:active:not(:disabled) { transform: scale(.93); transition: transform .08s ease; }
 .tool:disabled { opacity: .3; cursor: default; }
 .tool { transition: background-color .2s ease, border-color .2s ease, color .2s ease,
@@ -955,7 +978,7 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
 .swatch {
   width: 24px; height: 24px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,.1);
+  border: 2px solid var(--swatch-edge);
   background: var(--sw);
   cursor: pointer;
   padding: 0;
@@ -963,16 +986,28 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
 }
 .swatch:hover { transform: scale(1.12); }
 .swatch:active { transform: scale(.88); transition-duration: .08s; }
-.swatch.active { border-color: #fff; box-shadow: 0 0 10px var(--sw); animation: tool-pop .4s cubic-bezier(.34,1.56,.64,1); }
+.swatch.active { border-color: var(--swatch-ring); box-shadow: 0 0 10px var(--sw); animation: tool-pop .4s cubic-bezier(.34,1.56,.64,1); }
 
 .color-chip {
-  display: flex; align-items: center; justify-content: center;
-  width: 100%; height: 32px;
-  border: 1px solid transparent; border-radius: 6px;
-  background: transparent; overflow: hidden; cursor: pointer;
+  position: relative;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; height: 32px; border-radius: 6px; overflow: hidden; cursor: pointer;
+  color: var(--muted); font-size: 12px;
+  transition: background-color .2s ease, color .2s ease;
 }
+.color-chip:hover { background: var(--hover); color: var(--text); }
+.color-chip::before {
+  content: ""; flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%;
+  background: conic-gradient(#e02424, #f59e0b, #facc15, #16a34a, #06b6d4, #2563eb, #9333ea, #e02424);
+  border: 2px solid var(--swatch-edge);
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+}
+.color-chip:hover::before { transform: scale(1.12) rotate(40deg); }
+.color-chip::after { content: "Custom"; }
+/* the real input covers the row invisibly, so a tap anywhere opens the system picker */
 .color-chip input[type="color"] {
-  width: 150%; height: 150%; border: none; background: none; padding: 0; cursor: pointer;
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; border: 0; padding: 0; cursor: pointer;
 }
 
 .tb-size { gap: 2px; }
@@ -1286,10 +1321,11 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
   text-align: center;
   transition: opacity .3s ease;
   box-shadow: 0 4px 16px rgba(0,0,0,.2);
-  animation: hint-in .5s .35s cubic-bezier(.34,1.4,.64,1) both;
+  animation: hint-in .5s .35s cubic-bezier(.34,1.4,.64,1) backwards;
 }
+.hint.faded { opacity: 0; transition-duration: .8s; }
 /* keep hint-in in the list (already finished) so removing .swap doesn't replay it */
-.hint.swap { animation: hint-in 0s both, hint-swap .38s cubic-bezier(.34,1.4,.64,1); }
+.hint.swap { animation: hint-in 0s backwards, hint-swap .38s cubic-bezier(.34,1.4,.64,1); }
 @keyframes hint-in { from { opacity: 0; translate: 0 16px; } to { opacity: 1; translate: none; } }
 @keyframes hint-swap { from { opacity: 0; translate: 0 8px; scale: .94; } to { opacity: 1; translate: none; scale: none; } }
 
@@ -1441,6 +1477,7 @@ html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *
   z-index: 60;
   background: var(--ok); color: #fff;
   font-size: 14px; font-weight: 600;
+  width: max-content; max-width: calc(100vw - 32px);
   padding: 10px 20px; border-radius: 999px;
   box-shadow: 0 10px 30px rgba(0,0,0,.35);
   opacity: 0;
@@ -1466,8 +1503,7 @@ html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *
   .tb-layers .tool-txt { display: revert; }
   .tool { justify-content: flex-start; }
   .tb-layers .tool { justify-content: center; }
-  .tool:hover { background: rgba(255,255,255,.08); }
-  .floor-pill:hover { background: rgba(255,255,255,.06); }
+
 }
 
 /* Crosshair cursor when stamp/eraser tool is active */

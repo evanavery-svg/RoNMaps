@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.45";
+  const APP_VERSION = "0.46";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1185,7 +1185,15 @@
     if (el.hint.textContent !== hint) {
       el.hint.textContent = hint;
       nudge(el.hint, "swap");
+      showHint();
     }
+  }
+  // The hint steps aside after a few seconds so it isn't parked over the map.
+  let hintTimer = 0;
+  function showHint() {
+    el.hint.classList.remove("faded");
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => el.hint.classList.add("faded"), 6000);
   }
 
   // Highlight the active tool: X/W while stamping, else Arrow, Pen, or Eraser.
@@ -1798,6 +1806,7 @@
   }
   function closeNotes() {
     if (el.notesModal.hidden) return;
+    el.notesText.blur();          // or focus stays in the hidden box and swallows shortcuts
     el.notesModal.hidden = true;
     updateNotesBadge();
   }
@@ -1971,6 +1980,8 @@
 
   function showHub() {
     stopBriefing();
+    // an "Undo" toast belongs to the map we're leaving
+    if (el.toast.querySelector(".toast-action")) hideToast();
     teardownFloors();
     state.mission = null;
     el.stage.hidden = true;
@@ -2014,6 +2025,7 @@
     updateNotesBadge();
     state.floors.forEach(updateFloorCount);   // seed the floor-pill counts
     noteRecent(mission);
+    showHint();
     playBriefing(mission);
     if (!guideSeen()) setTimeout(showGuide, reducedMotion() ? 0 : 750);
   }
