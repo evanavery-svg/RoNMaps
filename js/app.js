@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "0.47";
+  const APP_VERSION = "0.48";
   const SVGNS = "http://www.w3.org/2000/svg";
   const STORAGE_PREFIX = "ronmaps:sinuous-trail:";  // kept for backward-compatible save keys
   const UNDO_LIMIT = 60;
@@ -1604,10 +1604,59 @@
       meta.textContent = (marked ? marked + " marked" : "No marks yet") + " \u00b7 " + timeAgo(r.at);
       body.append(name, meta);
       b.append(th, body);
-      b.addEventListener("click", () => goMission(mission, b));
+      b.title = "Hold to remove";
+      b.addEventListener("click", () => {
+        if (b._held) { b._held = false; return; }   // the click that ends a long-press
+        goMission(mission, b);
+      });
+      b.addEventListener("keydown", (e) => {
+        if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); removeRecentCard(b, mission); }
+      });
+      armRecentHold(b, mission);
       el.recentRow.appendChild(b);
     }
     syncRecentVisibility();
+  }
+
+  // Press and hold a "Jump back in" card to take it off the list (with Undo).
+  const RECENT_HOLD_MS = 550;
+  function armRecentHold(b, mission) {
+    let timer = 0, x0 = 0, y0 = 0;
+    const cancel = () => { clearTimeout(timer); timer = 0; b.classList.remove("holding"); };
+    b.addEventListener("pointerdown", (e) => {
+      if (e.button > 0) return;
+      x0 = e.clientX; y0 = e.clientY;
+      b._held = false;
+      b.classList.add("holding");
+      timer = setTimeout(() => {
+        timer = 0;
+        b._held = true;          // swallow the click this press would otherwise make
+        removeRecentCard(b, mission);
+      }, RECENT_HOLD_MS);
+    });
+    b.addEventListener("pointermove", (e) => {
+      if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cancel();
+    });
+    for (const t of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(t, () => { if (timer) cancel(); });
+    b.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+  function removeRecentCard(b, mission) {
+    if (b.classList.contains("removing")) return;
+    const list = loadRecent();
+    const index = list.findIndex((r) => r.n === mission.number);
+    if (index < 0) return;
+    const [entry] = list.splice(index, 1);
+    try { localStorage.setItem(STORAGE_PREFIX + "recent", JSON.stringify(list)); } catch (e) {}
+    buzz([12, 40, 12]);
+    b.classList.remove("holding");
+    b.classList.add("removing");
+    setTimeout(renderRecent, reducedMotion() ? 0 : 300);
+    toast("Removed from Jump back in", { action: "Undo", onAction: () => {
+      const now = loadRecent().filter((r) => r.n !== entry.n);
+      now.splice(Math.min(index, now.length), 0, entry);
+      try { localStorage.setItem(STORAGE_PREFIX + "recent", JSON.stringify(now.slice(0, RECENT_MAX))); } catch (e) {}
+      renderRecent();
+    } });
   }
   function syncRecentVisibility() {
     el.recent.hidden = !recentCount || !!el.missionSearch.value.trim() || hubFilter !== "all";

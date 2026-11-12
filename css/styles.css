@@ -336,6 +336,24 @@ body.hub-ready .recent { animation: head-in .7s .22s cubic-bezier(.22,1,.36,1) b
 .recent-card:hover { transform: translateY(-2px); border-color: var(--edge-strong); box-shadow: 0 8px 24px var(--shadow); }
 .recent-card:hover::after { transform: translateX(3px); color: var(--text); }
 .recent-card:active { transform: scale(.975); transition-duration: .08s; }
+.recent-tip {
+  margin-left: auto; font-family: var(--mono); font-weight: 500; font-size: 10px;
+  letter-spacing: .08em; color: var(--muted); opacity: .7;
+}
+/* holding: the card sinks and a red bar fills along its bottom edge; full = removed */
+.recent-card::before {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: var(--danger); box-shadow: 0 0 10px var(--danger);
+  transform: scaleX(0); transform-origin: left; pointer-events: none;
+  transition: transform .15s ease;
+}
+.recent-card.holding { transform: scale(.96); border-color: var(--danger); transition: transform .55s ease, border-color .2s ease; }
+.recent-card.holding::before { transform: scaleX(1); transition: transform .55s linear; }
+.recent-card.removing { pointer-events: none; animation: recent-out .3s cubic-bezier(.55,0,.75,.3) forwards; }
+@keyframes recent-out {
+  from { opacity: 1; }
+  to   { opacity: 0; transform: scale(.85); width: 0; padding-left: 0; padding-right: 0; margin-right: -10px; border-width: 0; }
+}
 .recent-thumb {
   flex: 0 0 auto; width: 52px; height: 52px; border-radius: 8px;
   background-size: cover; background-position: center;
