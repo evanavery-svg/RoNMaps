@@ -11,7 +11,7 @@
  *
  * Bump SHELL_VERSION for any app change. Bump MAPS_VERSION only if a map file is REPLACED
  * in place under the same name (rare) and you need clients to re-fetch it. */
-const SHELL_VERSION = "v56";
+const SHELL_VERSION = "v57";
 const MAPS_VERSION = "v1";
 const SHELL_CACHE = "ronmaps-shell-" + SHELL_VERSION;
 const MAPS_CACHE = "ronmaps-maps-" + MAPS_VERSION;
@@ -26,7 +26,7 @@ const SHELL_ASSETS = [
   "./icons/icon.svg",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
-  "./fonts/bebas-neue-400.woff2",
+  "./fonts/rajdhani-700.woff2",
 ];
 
 // --- thumbnails (keep in sync with thumbnails/ folder) ---
