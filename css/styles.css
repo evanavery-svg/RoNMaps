@@ -1,3 +1,12 @@
+/* Display face for the home-screen title. Bundled (OFL, see fonts/) so it works offline. */
+@font-face {
+  font-family: "Bebas Neue";
+  src: url("../fonts/bebas-neue-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #121212;
   --toolbar: #181818;
@@ -178,9 +187,13 @@ body.in-map .ambient {
 .hub-top { display: flex; align-items: center; justify-content: center; gap: 12px; position: relative; z-index: 5; }
 .hub-title {
   margin: 0;
-  font-size: clamp(24px, 5vw, 36px);
-  font-weight: 800;
-  letter-spacing: -.02em;
+  font-family: "Bebas Neue", Impact, "Arial Narrow", sans-serif;
+  font-size: clamp(34px, 6vw, 52px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding-top: .08em;            /* Bebas sits high in its line box; this centres it on the gear */
   color: var(--text);
   /* a one-shot accent sheen sweeps across the title after the splash */
   background: linear-gradient(100deg, var(--text) 0 40%, var(--accent) 50%, var(--text) 60% 100%);
@@ -195,6 +208,12 @@ body.hub-ready .hub-top { animation: head-in .7s cubic-bezier(.22,1,.36,1) both;
 body.hub-ready .hub-controls { animation: head-in .7s .08s cubic-bezier(.22,1,.36,1) both; }
 body.hub-ready .hub-title { animation: title-shine 1.5s .45s cubic-bezier(.4,0,.2,1) both; }
 @keyframes head-in { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+/* Very narrow phones: centring the title would run it into the gear, so left-align it
+   and scale it with the screen. */
+@media (max-width: 360px) {
+  .hub-top { justify-content: flex-start; padding-right: 46px; }
+  .hub-title { font-size: 8.6vw; }
+}
 @keyframes title-shine { from { background-position: 100% 0; } to { background-position: 0 0; } }
 .settings-btn {
   position: absolute; right: 0; top: 50%; transform: translateY(-50%);
